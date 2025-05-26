@@ -291,4 +291,4 @@ class TimerService {
   }
 }
 
-export default new TimerService();
+export default TimerService;

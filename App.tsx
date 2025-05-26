@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, StackCardStyleInterpolator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PushNotificationIOS from '@react-native-community/push-notification-ios';
 
 // Import updated screens
 import WelcomeScreen from './src/screens/WelcomeScreen';
@@ -13,10 +14,14 @@ import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 // Import services
-import TimerService from './src/services/TimerService';
+import EnhancedTimerService from './src/services/EnhancedTimerService';
 import SoundService from './src/services/SoundService';
 import QuizService from './src/services/QuizService';
 import ScoreService from './src/services/ScoreService';
+import NotificationService from './src/services/NotificationService';
+
+// Import components
+import TimeIndicator from './src/components/common/TimeIndicator';
 
 // Ignore specific warnings that might come from third-party libraries
 LogBox.ignoreLogs([
@@ -37,6 +42,7 @@ const Stack = createStackNavigator<RootStackParamList>();
 const App = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
+  const [timeIndicatorExpanded, setTimeIndicatorExpanded] = useState(false);
   
   // Setup and initialize services
   useEffect(() => {
@@ -64,9 +70,29 @@ const App = () => {
         await ScoreService.loadSavedData();
         console.log("Score service initialized successfully");
         
+        // Set up permissions for notifications
+        if (Platform.OS === 'ios') {
+          // Request permissions on iOS
+          PushNotificationIOS.requestPermissions()
+            .then(permissions => {
+              console.log('Notification permissions granted:', permissions);
+            })
+            .catch(error => {
+              console.error('Error requesting notification permissions:', error);
+            });
+        }
+        
         // Load saved time data
-        await TimerService.loadSavedTime();
-        console.log("Timer service initialized successfully");
+        const availableTime = await EnhancedTimerService.loadSavedTime();
+        console.log("Enhanced timer service initialized successfully");
+        
+        // Schedule initial reminder if needed
+        if (availableTime <= 300) { // 5 minutes or less
+          NotificationService.scheduleEarnTimeReminder(4); // Remind in 4 hours
+        }
+        
+        // Schedule daily streak reminder
+        NotificationService.scheduleStreakReminder();
         
         // Delay a bit to make sure everything is ready
         setTimeout(() => {
@@ -82,8 +108,9 @@ const App = () => {
     
     // Cleanup when app unmounts
     return () => {
-      TimerService.cleanup();
+      EnhancedTimerService.cleanup();
       SoundService.cleanup();
+      NotificationService.cancelAllNotifications();
     };
   }, []);
 
@@ -129,6 +156,12 @@ const App = () => {
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
+        
+        {/* Time indicator overlay - shown on all screens */}
+        <TimeIndicator 
+          expanded={timeIndicatorExpanded}
+          onPress={setTimeIndicatorExpanded}
+        />
       </NavigationContainer>
     </SafeAreaProvider>
   );
