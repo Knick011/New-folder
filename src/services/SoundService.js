@@ -20,7 +20,7 @@ class SoundService {
     this.STORAGE_KEY = 'brainbites_sounds_enabled';
     this.MUSIC_KEY = 'brainbites_music_enabled';
     
-    // Define sound files
+    // Define sound files - different paths for iOS vs Android
     this.soundFiles = {
       buttonpress: 'buttonpress.mp3',
       correct: 'correct.mp3',
@@ -69,15 +69,15 @@ class SoundService {
       
       Object.entries(this.soundFiles).forEach(([key, filename]) => {
         loadPromises.push(
-          new Promise((soundResolve, soundReject) => {
-            // Load sound from bundle
+          new Promise((soundResolve) => {
+            // For Android, load from assets. For iOS, load from main bundle
             const sound = new Sound(
               filename,
-              Platform.OS === 'android' ? Sound.MAIN_BUNDLE : Sound.MAIN_BUNDLE,
+              Platform.OS === 'android' ? null : Sound.MAIN_BUNDLE, // null = assets folder for Android
               (error) => {
                 if (error) {
                   console.error(`Failed to load sound ${filename}:`, error);
-                  soundReject(error);
+                  soundResolve(false);
                   return;
                 }
                 
@@ -91,7 +91,7 @@ class SoundService {
                   sound.setVolume(0.8); // Higher volume for sound effects
                 }
                 
-                soundResolve();
+                soundResolve(true);
               }
             );
           })
@@ -100,10 +100,10 @@ class SoundService {
       
       // Wait for all sounds to load
       Promise.allSettled(loadPromises).then((results) => {
-        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const successCount = results.filter(r => r.status === 'fulfilled' && r.value === true).length;
         console.log(`Sound Service initialized: ${successCount}/${loadPromises.length} sounds loaded`);
         this.isInitialized = true;
-        resolve(true);
+        resolve(successCount > 0);
       });
     });
   }
@@ -126,7 +126,7 @@ class SoundService {
     
     const sound = this.sounds[soundName];
     if (!sound) {
-      console.warn(`Sound ${soundName} not found`);
+      console.warn(`Sound ${soundName} not loaded or failed to load`);
       return null;
     }
     
