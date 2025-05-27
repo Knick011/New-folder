@@ -291,4 +291,5 @@ class TimerService {
   }
 }
 
-export default TimerService;
+const timerServiceInstance = new TimerService();
+export default timerServiceInstance;
