@@ -1,4 +1,4 @@
-// src/screens/QuizScreen.js - Complete updated version with enhanced mascot integration
+// src/screens/QuizScreen.js - Fixed version with original mascot functionality
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -36,7 +36,7 @@ const QuizScreen = ({ navigation, route }) => {
   const [streakLevel, setStreakLevel] = useState(0);
   const [isStreakMilestone, setIsStreakMilestone] = useState(false);
   
-  // Mascot state
+  // Mascot state - simplified for quiz functionality
   const [mascotType, setMascotType] = useState('happy');
   const [mascotMessage, setMascotMessage] = useState('');
   const [showMascot, setShowMascot] = useState(false);
@@ -199,37 +199,12 @@ const QuizScreen = ({ navigation, route }) => {
     SoundService.playIncorrect();
     
     // Show mascot for timeout
-    showMascotForAnswer(false, 0, true);
+    showMascotForTimeout();
   };
   
-  const showMascotForAnswer = (isCorrect, streak, isTimeout = false) => {
-    if (isTimeout) {
-      setMascotType('sad');
-      setMascotMessage("Time's up! ⏰\nDon't worry, you'll get the next one!");
-    } else if (isCorrect) {
-      if (streak >= 10) {
-        setMascotType('excited');
-        setMascotMessage('Incredible! You\'re on fire! 🔥🔥🔥\nYou\'re absolutely crushing it!');
-      } else if (streak >= 5) {
-        setMascotType('excited');
-        setMascotMessage('Amazing streak! Keep going! 🎉\nYou\'re doing fantastic!');
-      } else if (streak >= 3) {
-        setMascotType('happy');
-        setMascotMessage('Great job! You\'re doing awesome! 🌟\nKeep up the great work!');
-      } else {
-        setMascotType('happy');
-        setMascotMessage('Correct! Well done! ✨\nYou earned some app time!');
-      }
-    } else {
-      if (streak === 0) {
-        setMascotType('sad');
-        setMascotMessage('Oops! That\'s not quite right. 😔\nDon\'t give up, you\'ve got this!');
-      } else {
-        setMascotType('depressed');
-        setMascotMessage('Oh no! Your streak is broken! 💔\nBut you can start a new one right now!');
-      }
-    }
-    
+  const showMascotForTimeout = () => {
+    setMascotType('sad');
+    setMascotMessage("Time's up! ⏰\nDon't worry, you'll get the next one!");
     setShowMascot(true);
   };
 
@@ -308,13 +283,13 @@ const QuizScreen = ({ navigation, route }) => {
         // Regular reward - 30 seconds
         TimerService.addTimeCredits(30);
         SoundService.playCorrect();
-        // No mascot for regular correct answers
+        // No mascot popup for regular correct answers
       }
     } else {
       // Reset streak on wrong answer
       setStreak(0);
       SoundService.playIncorrect();
-      showMascotForWrongAnswer(currentQuestion.correctAnswer, currentQuestion.options[currentQuestion.correctAnswer]);
+      showMascotForWrongAnswer();
     }
     
     // Show explanation with a delay
@@ -332,6 +307,45 @@ const QuizScreen = ({ navigation, route }) => {
       tension: 40,
       useNativeDriver: true,
     }).start();
+  };
+  
+  const showMascotForStreak = (streakCount) => {
+    if (streakCount >= 10) {
+      setMascotType('excited');
+      setMascotMessage(`🔥 INCREDIBLE STREAK! ${streakCount} in a row! 🔥\n\nYou're absolutely unstoppable!\nYou earned 2 bonus minutes! 🎉`);
+    } else if (streakCount >= 5) {
+      setMascotType('excited');
+      setMascotMessage(`🎉 STREAK MILESTONE! ${streakCount} correct! 🎉\n\nAmazing work!\nYou earned 2 bonus minutes! ⏰`);
+    }
+    setShowMascot(true);
+  };
+
+  const showMascotForWrongAnswer = () => {
+    setMascotType('sad');
+    setMascotMessage(`Oops! That's not quite right. 😔\n\nThe correct answer was:\n${currentQuestion.correctAnswer}: ${currentQuestion.options[currentQuestion.correctAnswer]}\n\nTap me for a detailed explanation!`);
+    setShowMascot(true);
+  };
+  
+  // ORIGINAL QUIZ FUNCTIONALITY: Handle peeking mascot press for explanations
+  const handlePeekingMascotPress = () => {
+    if (!currentQuestion) return;
+    
+    if (selectedAnswer && showExplanation) {
+      // Show detailed explanation after answering
+      if (isCorrect) {
+        setMascotType('happy');
+        setMascotMessage(`Great job! Here's why this is correct:\n\n${currentQuestion.explanation}\n\nKeep up the excellent work! 🌟`);
+      } else {
+        setMascotType('happy');
+        setMascotMessage(`Let me explain why the answer was ${currentQuestion.correctAnswer}:\n\n${currentQuestion.explanation}\n\nDon't worry, you'll get the next one! 💪`);
+      }
+      setShowMascot(true);
+    } else if (!selectedAnswer) {
+      // No answer selected yet - show hint
+      setMascotType('happy');
+      setMascotMessage('Take your time and think carefully! 🤔\n\nRead each option and pick the one that seems most correct.\n\nYou\'ve got this! 💪');
+      setShowMascot(true);
+    }
   };
   
   const handleMascotDismiss = () => {
@@ -383,43 +397,6 @@ const QuizScreen = ({ navigation, route }) => {
   const getStreakProgress = () => {
     if (streak === 0) return 0;
     return (streak % 5) / 5;
-  };
-
-  // Add these new functions after the existing showMascotForAnswer function
-  const showMascotForStreak = (streakCount) => {
-    if (streakCount >= 10) {
-      setMascotType('excited');
-      setMascotMessage(`🔥 INCREDIBLE STREAK! ${streakCount} in a row! 🔥\n\nYou're absolutely unstoppable!\nYou earned 2 bonus minutes! 🎉`);
-    } else if (streakCount >= 5) {
-      setMascotType('excited');
-      setMascotMessage(`🎉 STREAK MILESTONE! ${streakCount} correct! 🎉\n\nAmazing work!\nYou earned 2 bonus minutes! ⏰`);
-    }
-    setShowMascot(true);
-  };
-
-  const showMascotForWrongAnswer = (correctOption, correctText) => {
-    setMascotType('sad');
-    setMascotMessage(`Oops! That's not quite right. 😔\n\nThe correct answer was:\n${correctOption}: ${correctText}\n\nTap me again for a detailed explanation!`);
-    setShowMascot(true);
-  };
-
-  const handlePeekingMascotPress = () => {
-    if (showExplanation && isCorrect) {
-      // Show detailed explanation for correct answer
-      setMascotType('happy');
-      setMascotMessage(`Great job! Here's why this is correct:\n\n${currentQuestion.explanation}\n\nKeep up the excellent work! 🌟`);
-      setShowMascot(true);
-    } else if (showExplanation && !isCorrect) {
-      // Show detailed explanation for wrong answer
-      setMascotType('happy');
-      setMascotMessage(`Let me explain why the answer was ${currentQuestion.correctAnswer}:\n\n${currentQuestion.explanation}\n\nDon't worry, you'll get the next one! 💪`);
-      setShowMascot(true);
-    } else {
-      // Default peeking behavior
-      setMascotType('happy');
-      setMascotMessage('Hi there! Need help? Just pick an answer and I\'ll be here to guide you! 🧠');
-      setShowMascot(true);
-    }
   };
 
   if (isLoading) {
@@ -544,7 +521,6 @@ const QuizScreen = ({ navigation, route }) => {
               ]}
             />
           </View>
-          
           <View style={styles.timerIconContainer}>
             <Icon name="timer-outline" size={18} color="#777" />
           </View>
@@ -689,7 +665,7 @@ const QuizScreen = ({ navigation, route }) => {
         )}
       </ScrollView>
       
-      {/* Enhanced Mascot - Full screen overlay when showing */}
+      {/* Enhanced Mascot - Quiz Screen with original functionality */}
       <EnhancedMascotDisplay
         type={mascotType}
         position="left"
@@ -700,6 +676,10 @@ const QuizScreen = ({ navigation, route }) => {
         autoHide={false}
         fullScreen={true}
         onPeekingPress={handlePeekingMascotPress}
+        // Quiz-specific props for original functionality
+        isQuizScreen={true}
+        currentQuestion={currentQuestion}
+        selectedAnswer={selectedAnswer}
         showExplanation={showExplanation}
         isCorrect={isCorrect}
       />
@@ -833,36 +813,6 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
     textAlign: 'right',
   },
-  timerContainer: {
-    marginBottom: 20,
-    position: 'relative',
-  },
-  timerBar: {
-    height: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  timerFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  timerIconContainer: {
-    position: 'absolute',
-    right: -8,
-    top: -8,
-    backgroundColor: 'white',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
   questionContainer: {
     backgroundColor: 'white',
     borderRadius: 24,
@@ -934,61 +884,6 @@ const styles = StyleSheet.create({
     borderColor: '#F44336',
     borderWidth: 2,
   },
-  explanationContainer: {
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
-    marginBottom: 24,
-  },
-  explanationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  explanationIcon: {
-    marginRight: 12,
-  },
-  correctExplanation: {
-    backgroundColor: 'rgba(76, 175, 80, 0.08)',
-    borderColor: 'rgba(76, 175, 80, 0.3)',
-    borderWidth: 2,
-  },
-  incorrectExplanation: {
-    backgroundColor: 'rgba(244, 67, 54, 0.08)',
-    borderColor: 'rgba(244, 67, 54, 0.3)',
-    borderWidth: 2,
-  },
-  explanationTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  explanationText: {
-    fontSize: 16,
-    marginBottom: 20,
-    lineHeight: 24,
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
-  },
-  rewardContainer: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rewardText: {
-    color: '#856404',
-    fontWeight: 'bold',
-    marginLeft: 8,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
   continueButton: {
     backgroundColor: '#FF9F1C',
     paddingVertical: 14,
@@ -1008,27 +903,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     marginRight: 8,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  backButton: {
-    backgroundColor: '#FF9F1C',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: 'rgba(255, 159, 28, 0.4)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  backButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginLeft: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
   },
   pointsAnimationContainer: {
@@ -1077,6 +951,36 @@ const styles = StyleSheet.create({
   optionArrow: {
     position: 'absolute',
     right: 16,
+  },
+  timerContainer: {
+    marginBottom: 20,
+    position: 'relative',
+  },
+  timerBar: {
+    height: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  timerFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  timerIconContainer: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    backgroundColor: 'white',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
 

@@ -10,13 +10,13 @@ import {
   Platform
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import EnhancedTimerService from '../../services/EnhancedTimerService';
+import TimerService from '../../services/TimerService';
 import theme from '../../styles/theme';
 
 const { width } = Dimensions.get('window');
 
 const TimeIndicator = ({ onPress, expanded = false }) => {
-  const [time, setTime] = useState(EnhancedTimerService.getAvailableTime());
+  const [time, setTime] = useState(TimerService.getAvailableTime());
   const [isExpanded, setIsExpanded] = useState(expanded);
   
   // Animation values
@@ -25,7 +25,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
   
   useEffect(() => {
     // Subscribe to timer updates
-    const removeListener = EnhancedTimerService.addEventListener(handleTimerEvent);
+    const removeListener = TimerService.addEventListener(handleTimerEvent);
     
     // Start pulse animation for low time
     if (time < 300) { // Less than 5 minutes
@@ -41,7 +41,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
     Animated.timing(expandAnim, {
       toValue: expanded ? 1 : 0,
       duration: 200,
-      useNativeDriver: false, // Using width interpolation
+      useNativeDriver: false, // FIXED: width interpolation requires useNativeDriver: false
       easing: Easing.inOut(Easing.ease),
     }).start();
   }, [expanded]);
@@ -53,7 +53,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
         Animated.timing(pulseAnim, {
           toValue: 1.1,
           duration: 500,
-          useNativeDriver: true,
+          useNativeDriver: true, // Scale animations can use native driver
           easing: Easing.inOut(Easing.sin),
         }),
         Animated.timing(pulseAnim, {
@@ -69,10 +69,10 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
   // Handle timer events
   const handleTimerEvent = (event) => {
     if (event.event === 'timeUpdate' || event.event === 'creditsAdded') {
-      setTime(EnhancedTimerService.getAvailableTime());
+      setTime(TimerService.getAvailableTime());
       
       // Start pulsing animation if time is low
-      if (EnhancedTimerService.getAvailableTime() < 300 && !pulseAnim._animation) {
+      if (TimerService.getAvailableTime() < 300 && !pulseAnim._animation) {
         startPulseAnimation();
       }
     }
@@ -86,7 +86,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
     Animated.timing(expandAnim, {
       toValue: newState ? 1 : 0,
       duration: 200,
-      useNativeDriver: false, // Using width interpolation
+      useNativeDriver: false, // FIXED: width interpolation requires useNativeDriver: false
       easing: Easing.inOut(Easing.ease),
     }).start();
     
@@ -103,7 +103,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
   };
   
   // Format time
-  const formattedTime = EnhancedTimerService.formatTime(time);
+  const formattedTime = TimerService.formatTime(time);
   
   return (
     <Animated.View
@@ -128,24 +128,19 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
       >
         <Icon name="timer-outline" size={isExpanded ? 18 : 20} color="white" />
         
-        <Animated.View
-          style={[
-            styles.timeTextContainer,
-            {
-              opacity: expandAnim,
-              width: expandAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 80]
-              }),
-              marginLeft: expandAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 8]
-              })
-            }
-          ]}
-        >
-          <Text style={styles.timeText}>{formattedTime}</Text>
-        </Animated.View>
+        {/* FIXED: Remove width interpolation and use simpler approach */}
+        {isExpanded && (
+          <Animated.View
+            style={[
+              styles.timeTextContainer,
+              {
+                opacity: expandAnim,
+              }
+            ]}
+          >
+            <Text style={styles.timeText}>{formattedTime}</Text>
+          </Animated.View>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -174,7 +169,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   timeTextContainer: {
-    overflow: 'hidden',
+    marginLeft: 8, // FIXED: Use static marginLeft instead of animated
   },
   timeText: {
     color: 'white',

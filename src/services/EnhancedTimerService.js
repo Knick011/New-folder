@@ -1,19 +1,61 @@
+// src/services/EnhancedTimerService.js - Fixed version
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
+
+// Import TimerService correctly
 import TimerService from './TimerService';
 
-class EnhancedTimerService extends TimerService {
+class EnhancedTimerService {
   constructor() {
-    super();
+    // Instead of extending, we'll compose with TimerService
+    this.timerService = TimerService;
     this.isBrainBitesActive = true; // App starts in foreground
     this.lastUpdateTime = null;
+    this.isRunning = false;
+    this.timer = null;
+    this.startTime = null;
+    this.listeners = [];
+    this.availableTime = 0;
+    this.appState = 'active';
     
-    // Override the app state change handler
-    if (this.appStateSubscription) {
-      this.appStateSubscription.remove();
-    }
+    // Set up app state listener
     this.appStateSubscription = AppState.addEventListener('change', this._handleAppStateChange);
+  }
+  
+  // Delegate methods to TimerService
+  async loadSavedTime() {
+    const result = await this.timerService.loadSavedTime();
+    this.availableTime = this.timerService.getAvailableTime();
+    
+    // If we have time and app is in background, start tracking
+    if (this.availableTime > 0 && !this.isBrainBitesActive) {
+      this._startTrackingIfNeeded();
+    }
+    
+    return result;
+  }
+  
+  getAvailableTime() {
+    return this.timerService.getAvailableTime();
+  }
+  
+  formatTime(seconds) {
+    return this.timerService.formatTime(seconds);
+  }
+  
+  addTimeCredits(seconds) {
+    const result = this.timerService.addTimeCredits(seconds);
+    this.availableTime = this.timerService.getAvailableTime();
+    return result;
+  }
+  
+  addEventListener(callback) {
+    return this.timerService.addEventListener(callback);
+  }
+  
+  async saveTimeData() {
+    return await this.timerService.saveTimeData();
   }
   
   // Enhanced app state change handler
@@ -91,6 +133,9 @@ class EnhancedTimerService extends TimerService {
       // Decrease available time
       this.availableTime = Math.max(0, this.availableTime - elapsedSeconds);
       
+      // Update TimerService's available time
+      this.timerService.availableTime = this.availableTime;
+      
       // Update last update time
       this.lastUpdateTime = now;
       
@@ -142,25 +187,36 @@ class EnhancedTimerService extends TimerService {
     }
   }
   
-  // Override loadSavedTime to handle background tracking
-  async loadSavedTime() {
-    await super.loadSavedTime();
-    
-    // If we have time and app is in background, start tracking
-    if (this.availableTime > 0 && !this.isBrainBitesActive) {
-      this._startTrackingIfNeeded();
-    }
-    
-    return this.availableTime;
+  // Notify all listeners
+  _notifyListeners(event, data = {}) {
+    this.listeners.forEach(listener => {
+      try {
+        listener({ event, ...data });
+      } catch (error) {
+        console.error('Error notifying listener:', error);
+      }
+    });
   }
   
-  // Override cleanup to handle enhanced features
+  // Cleanup method
   cleanup() {
-    super.cleanup();
+    // Stop tracking
+    this._pauseTracking();
+    
+    // Remove app state listener
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
     
     // Cancel all notifications
     NotificationService.cancelAllNotifications();
+    
+    // Cleanup timer service
+    if (this.timerService && this.timerService.cleanup) {
+      this.timerService.cleanup();
+    }
   }
 }
 
-export default new EnhancedTimerService(); 
+export default new EnhancedTimerService();

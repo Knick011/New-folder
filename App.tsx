@@ -1,9 +1,9 @@
-// App.tsx (Updated with enhanced components and proper navigation)
+// App.tsx - Clean version without TimeIndicator
 import React, { useEffect, useState } from 'react';
 import { StatusBar, View, Text, ActivityIndicator, StyleSheet, LogBox, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator, StackCardStyleInterpolator } from '@react-navigation/stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PushNotificationIOS from '@react-native-community/push-notification-ios';
 
@@ -14,22 +14,20 @@ import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 // Import services
-import EnhancedTimerService from './src/services/EnhancedTimerService';
+import TimerService from './src/services/TimerService';
 import SoundService from './src/services/SoundService';
 import QuizService from './src/services/QuizService';
 import ScoreService from './src/services/ScoreService';
 import NotificationService from './src/services/NotificationService';
 
-// Import components
-import TimeIndicator from './src/components/common/TimeIndicator';
-
-// Ignore specific warnings that might come from third-party libraries
+// Ignore specific warnings
 LogBox.ignoreLogs([
   'ViewPropTypes will be removed',
   'ColorPropType will be removed',
+  'Style property',
+  'useNativeDriver',
 ]);
 
-// Stack navigator type
 type RootStackParamList = {
   Welcome: undefined;
   Home: undefined;
@@ -42,37 +40,29 @@ const Stack = createStackNavigator<RootStackParamList>();
 const App = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
-  const [timeIndicatorExpanded, setTimeIndicatorExpanded] = useState(false);
   
-  // Setup and initialize services
   useEffect(() => {
     const initializeServices = async () => {
       try {
         console.log("Initializing services...");
         
-        // First check if this is the first launch
         const hasLaunchedBefore = await AsyncStorage.getItem('brainbites_onboarding_complete');
         setIsFirstLaunch(hasLaunchedBefore !== 'true');
         
-        // Initialize the sound service (simplified approach)
         try {
           await SoundService.initSounds();
-          console.log("Sound service initialized (minimal implementation)");
+          console.log("Sound service initialized");
         } catch (err) {
           console.warn("Sound initialization error - continuing anyway:", err);
         }
         
-        // Initialize the quiz service
         await QuizService.initialize();
         console.log("Quiz service initialized successfully");
         
-        // Initialize score service
         await ScoreService.loadSavedData();
         console.log("Score service initialized successfully");
         
-        // Set up permissions for notifications
         if (Platform.OS === 'ios') {
-          // Request permissions on iOS
           PushNotificationIOS.requestPermissions()
             .then(permissions => {
               console.log('Notification permissions granted:', permissions);
@@ -82,19 +72,15 @@ const App = () => {
             });
         }
         
-        // Load saved time data
-        const availableTime = await EnhancedTimerService.loadSavedTime();
-        console.log("Enhanced timer service initialized successfully");
+        const availableTime = await TimerService.loadSavedTime();
+        console.log("Timer service initialized successfully");
         
-        // Schedule initial reminder if needed
-        if (availableTime <= 300) { // 5 minutes or less
-          NotificationService.scheduleEarnTimeReminder(4); // Remind in 4 hours
+        if (availableTime <= 300) {
+          NotificationService.scheduleEarnTimeReminder(4);
         }
         
-        // Schedule daily streak reminder
         NotificationService.scheduleStreakReminder();
         
-        // Delay a bit to make sure everything is ready
         setTimeout(() => {
           setIsInitializing(false);
         }, 1000);
@@ -106,15 +92,13 @@ const App = () => {
 
     initializeServices();
     
-    // Cleanup when app unmounts
     return () => {
-      EnhancedTimerService.cleanup();
+      TimerService.cleanup();
       SoundService.cleanup();
       NotificationService.cancelAllNotifications();
     };
   }, []);
 
-  // Show a loading screen while initializing
   if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
@@ -133,7 +117,6 @@ const App = () => {
           screenOptions={{
             headerShown: false,
             cardStyle: { backgroundColor: '#FFF8E7' },
-            // Add fancy transition effects
             cardStyleInterpolator: ({ current, layouts }) => {
               return {
                 cardStyle: {
@@ -157,11 +140,7 @@ const App = () => {
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
         
-        {/* Time indicator overlay - shown on all screens */}
-        <TimeIndicator 
-          expanded={timeIndicatorExpanded}
-          onPress={setTimeIndicatorExpanded}
-        />
+        {/* TimeIndicator removed - using speech bubble in individual screens instead */}
       </NavigationContainer>
     </SafeAreaProvider>
   );

@@ -1,4 +1,4 @@
-// src/screens/HomeScreen.js - Complete updated version with enhanced mascot
+// src/screens/HomeScreen.js - Fixed version with time display only
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -20,6 +20,7 @@ import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../styles/theme';
 import commonStyles from '../styles/commonStyles';
+import TimeSpeechBubble from '../components/common/TimeSpeechBubble';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ const HomeScreen = ({ navigation }) => {
   const [mascotType, setMascotType] = useState('happy');
   const [mascotMessage, setMascotMessage] = useState(null);
   const [mascotEnabled, setMascotEnabled] = useState(true);
+  const [showTimeBubble, setShowTimeBubble] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -107,10 +109,10 @@ const HomeScreen = ({ navigation }) => {
       ),
     ]).start();
     
-    // Show welcome mascot after a delay (only if enabled)
+    // Show welcome mascot with time info after a delay (only if enabled and low/no time)
     setTimeout(() => {
       if (mascotEnabled) {
-        updateMascotMessage();
+        showInitialMascotMessage();
       }
     }, 2000);
     
@@ -146,13 +148,6 @@ const HomeScreen = ({ navigation }) => {
     Animated.parallel(animations).start();
   };
   
-  useEffect(() => {
-    // Update mascot message when time changes (only if mascot is enabled)
-    if (mascotEnabled) {
-      updateMascotMessage();
-    }
-  }, [availableTime, mascotEnabled]);
-  
   // Update category animations when categories change
   useEffect(() => {
     // Initialize animation values for new categories
@@ -186,16 +181,20 @@ const HomeScreen = ({ navigation }) => {
     }
   };
   
-  const updateMascotMessage = () => {
+  // Show initial mascot message based on available time
+  const showInitialMascotMessage = () => {
     if (!mascotEnabled) return;
     
     if (availableTime <= 0) {
       setMascotType('depressed');
-      setMascotMessage("You're out of app time! 😢\n\nAnswer some questions to earn more time and unlock your favorite apps!\n\nLet's start learning! 📚");
+      setMascotMessage("Welcome to Brain Bites! 🧠\n\nYou're out of app time! 😢\nAnswer some questions to earn more time and unlock your favorite apps!\n\nLet's start learning! 📚");
       setShowMascot(true);
-    } else {
-      setShowMascot(false);
+    } else if (availableTime < 300) { // Less than 5 minutes
+      setMascotType('happy');
+      setMascotMessage(`Welcome back! 🌟\n\nYou have ${TimerService.formatTime(availableTime)} of app time remaining.\n\nAnswer more questions to earn extra time! 🧠⏰`);
+      setShowMascot(true);
     }
+    // Don't show mascot if user has plenty of time
   };
   
   const handleTimerEvent = (event) => {
@@ -232,37 +231,18 @@ const HomeScreen = ({ navigation }) => {
     setShowMascot(false);
   };
   
+  // HOME SCREEN SPECIFIC: Handle peeking mascot press to show time information
+  const handlePeekingMascotPress = () => {
+    if (!mascotEnabled) return;
+    setShowTimeBubble(true);
+  };
+  
   const handleTimeCardPress = () => {
-    // Show information about current time with mascot
-    if (mascotEnabled) {
-      let message = '';
-      let type = 'happy';
-      
-      if (availableTime <= 0) {
-        type = 'depressed';
-        message = "You have no app time remaining! 😔\n\nComplete quizzes to earn time:\n• Each correct answer = 30 seconds\n• Streak milestones = 2 minutes bonus!";
-      } else {
-        type = 'happy';
-        const hours = Math.floor(availableTime / 3600);
-        const minutes = Math.floor((availableTime % 3600) / 60);
-        const seconds = availableTime % 60;
-        
-        let timeBreakdown = '';
-        if (hours > 0) {
-          timeBreakdown = `${hours} hour${hours > 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-        } else if (minutes > 0) {
-          timeBreakdown = `${minutes} minute${minutes !== 1 ? 's' : ''}, ${seconds} second${seconds !== 1 ? 's' : ''}`;
-        } else {
-          timeBreakdown = `${seconds} second${seconds !== 1 ? 's' : ''}`;
-        }
-        
-        message = `You have ${timeBreakdown} of app time! ⏰\n\nUse it wisely on your favorite apps.\nWhen it runs out, come back to earn more! 🧠`;
-      }
-      
-      setMascotType(type);
-      setMascotMessage(message);
-      setShowMascot(true);
-    }
+    setShowTimeBubble(true);
+  };
+  
+  const handleTimeBubbleDismiss = () => {
+    setShowTimeBubble(false);
   };
   
   const getCategoryIcon = (category) => {
@@ -497,7 +477,7 @@ const HomeScreen = ({ navigation }) => {
         </ScrollView>
       </Animated.View>
       
-      {/* Enhanced Mascot with full screen overlay */}
+      {/* Enhanced Mascot - Home Screen with time display functionality only */}
       <EnhancedMascotDisplay
         type={mascotType}
         position="left"
@@ -505,8 +485,16 @@ const HomeScreen = ({ navigation }) => {
         message={mascotMessage}
         onDismiss={handleMascotDismiss}
         onMessageComplete={handleMascotDismiss}
-        autoHide={false} // User can dismiss by tapping
-        fullScreen={true} // Use full screen overlay
+        autoHide={false}
+        fullScreen={true}
+        onPeekingPress={handlePeekingMascotPress}
+        isQuizScreen={false}
+        mascotEnabled={mascotEnabled}
+      />
+      <TimeSpeechBubble
+        visible={showTimeBubble}
+        onDismiss={handleTimeBubbleDismiss}
+        position="left"
       />
     </SafeAreaView>
   );

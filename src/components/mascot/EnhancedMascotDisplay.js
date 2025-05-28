@@ -1,4 +1,4 @@
-// src/components/mascot/EnhancedMascotDisplay.js
+// src/components/mascot/EnhancedMascotDisplay.js - Fixed version with original quiz functionality
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -38,12 +38,13 @@ const EnhancedMascotDisplay = ({
   onMessageComplete = null,
   fullScreen = true,
   mascotEnabled = true,
-  setMascotType = () => {},
-  setMascotMessage = () => {},
-  setShowMascot = () => {},
   onPeekingPress = null,
   showExplanation = false,
-  isCorrect = null
+  isCorrect = null,
+  // Quiz-specific props
+  isQuizScreen = false,
+  currentQuestion = null,
+  selectedAnswer = null
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [displayedMessage, setDisplayedMessage] = useState(message);
@@ -55,7 +56,6 @@ const EnhancedMascotDisplay = ({
   const bubbleAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
   
   // Timing controls
   const hideTimer = useRef(null);
@@ -204,62 +204,48 @@ const EnhancedMascotDisplay = ({
         easing: Easing.in(Easing.cubic),
       }),
     ]).start(() => {
-      setIsVisible(false);
-      setShowOverlay(false);
-      setDisplayedMessage(null);
-      
-      // Reset animation values
-      mascotAnim.setValue(0);
-      bubbleAnim.setValue(0);
-      scaleAnim.setValue(0.8);
-      bounceAnim.setValue(0);
-      
-      // Notify completion
-      if (onMessageComplete) {
-        onMessageComplete();
-      }
-      if (onDismiss) {
-        onDismiss();
-      }
+      setTimeout(() => {
+        setIsVisible(false);
+        setShowOverlay(false);
+        setDisplayedMessage(null);
+        // Notify completion
+        if (onMessageComplete) {
+          onMessageComplete();
+        }
+        if (onDismiss) {
+          onDismiss();
+        }
+      }, 0);
     });
   };
   
   const handleScreenTap = () => {
-    // Only allow dismissing by tapping screen if it's not a wrong answer waiting for explanation
-    if (showExplanation && !isCorrect) {
-      clearTimeout(hideTimer.current);
-      setShowMascot(false);
-      setIsVisible(false);
-      setShowOverlay(false);
-      setDisplayedMessage(null);
-      mascotAnim.setValue(0);
-      bubbleAnim.setValue(0);
-      scaleAnim.setValue(0.8);
-      bounceAnim.setValue(0);
-      overlayAnim.setValue(0);
-      if (onMessageComplete) {
-        onMessageComplete();
+    clearTimeout(hideTimer.current);
+    hideMascot();
+  };
+  
+  // Handle peeking mascot press - QUIZ SPECIFIC FUNCTIONALITY
+  const handlePeekingMascotPress = () => {
+    if (isQuizScreen && currentQuestion) {
+      // Quiz screen functionality - show explanation
+      if (selectedAnswer && onPeekingPress) {
+        // Call the quiz screen's explanation handler
+        onPeekingPress();
+      } else if (onPeekingPress) {
+        // No answer selected yet - show hint
+        onPeekingPress();
       }
-      if (onDismiss) {
-        onDismiss();
-      }
-    } else {
-      clearTimeout(hideTimer.current);
-      setShowMascot(false);
-      setIsVisible(false);
-      setShowOverlay(false);
-      setDisplayedMessage(null);
-      mascotAnim.setValue(0);
-      bubbleAnim.setValue(0);
-      scaleAnim.setValue(0.8);
-      bounceAnim.setValue(0);
-      overlayAnim.setValue(0);
-      if (onMessageComplete) {
-        onMessageComplete();
-      }
-      if (onDismiss) {
-        onDismiss();
-      }
+    } else if (onPeekingPress) {
+      // Non-quiz screen functionality (like home screen time display)
+      onPeekingPress();
+    }
+  };
+  
+  // Handle sad mascot press in quiz - show explanation
+  const handleSadMascotPress = () => {
+    if (isQuizScreen && type === 'sad' && selectedAnswer && !isCorrect && onPeekingPress) {
+      // Show detailed explanation for wrong answer
+      onPeekingPress();
     }
   };
   
@@ -321,15 +307,7 @@ const EnhancedMascotDisplay = ({
       <View style={styles.peekingContainer}>
         <TouchableOpacity 
           style={styles.peekingMascot}
-          onPress={() => {
-            if (onPeekingPress) {
-              onPeekingPress();
-            } else if (mascotEnabled) {
-              setMascotType('happy');
-              setMascotMessage('Hi there! Tap a category to start learning! 🧠');
-              setShowMascot(true);
-            }
-          }}
+          onPress={handlePeekingMascotPress}
           activeOpacity={0.8}
         >
           <Image 
@@ -355,7 +333,7 @@ const EnhancedMascotDisplay = ({
           }
         ]}
       >
-        {/* Speech bubble - centered above mascot, previous position, no arrow */}
+        {/* Speech bubble - centered above mascot */}
         {displayedMessage && (
           <Animated.View 
             style={[
@@ -365,8 +343,8 @@ const EnhancedMascotDisplay = ({
                 transform: getBubbleTransform(),
                 position: 'absolute',
                 left: '50%',
-                bottom: 230, // moved higher
-                marginLeft: -160, // Center the bubble (assuming maxWidth: 320)
+                bottom: 230,
+                marginLeft: -160, // Center the bubble
                 zIndex: 1002,
               }
             ]}
@@ -384,7 +362,9 @@ const EnhancedMascotDisplay = ({
                 }
               ]}
             >
-              <Text style={styles.tapText}>Tap anywhere to continue</Text>
+              <Text style={styles.tapText}>
+                {isQuizScreen && type === 'sad' ? 'Tap me for explanation' : 'Tap anywhere to continue'}
+              </Text>
             </Animated.View>
           </Animated.View>
         )}
@@ -401,13 +381,9 @@ const EnhancedMascotDisplay = ({
           >
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => {
-                // Only allow explanation tap if mascot is sad and answer is wrong
-                if (type === 'sad' && typeof onPeekingPress === 'function') {
-                  onPeekingPress();
-                }
-              }}
+              onPress={handleSadMascotPress}
               style={styles.mascotImageContainer}
+              disabled={!(isQuizScreen && type === 'sad' && selectedAnswer && !isCorrect)}
             >
               <Image 
                 source={getMascotImage()} 
@@ -415,8 +391,6 @@ const EnhancedMascotDisplay = ({
                 resizeMode="contain" 
               />
             </TouchableOpacity>
-            {/* Mascot base/ground shadow */}
-            <View style={styles.mascotShadow} />
           </Animated.View>
         </View>
       </Animated.View>
@@ -442,13 +416,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 297, // 55% of 540px mascot height (was 243)
+    height: 297,
     overflow: 'hidden',
   },
   mascotWrapper: {
     alignItems: 'center',
     justifyContent: 'flex-start',
-    height: 540, // Updated to match new mascot height
+    height: 540,
     marginTop: 0,
   },
   mascotLeft: {
@@ -458,18 +432,14 @@ const styles = StyleSheet.create({
     marginRight: -50,
   },
   mascotImageContainer: {
-    width: 450, // Increased from 400
-    height: 540, // Increased from 480
+    width: 450,
+    height: 540,
     justifyContent: 'center',
     alignItems: 'center',
   },
   mascotImage: {
     width: '100%',
     height: '100%',
-  },
-  mascotShadow: {
-    // Hidden since mascot is at bottom edge
-    display: 'none',
   },
   speechBubble: {
     position: 'absolute',
@@ -480,7 +450,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     borderWidth: 3,
     borderColor: theme.colors.primary,
-    bottom: '25%', // Moved down from 85% to 25%
+    bottom: '25%',
     zIndex: 1002,
     ...Platform.select({
       ios: {
@@ -519,8 +489,8 @@ const styles = StyleSheet.create({
   },
   peekingContainer: {
     position: 'absolute',
-    bottom: -58, // 7% more off-screen than before
-    left: -58,   // 7% more off-screen than before
+    bottom: -58,
+    left: -58,
     zIndex: 50,
   },
   peekingMascot: {
