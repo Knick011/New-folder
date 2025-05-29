@@ -18,6 +18,8 @@ import TimerService from '../services/TimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
+import NotificationService from '../services/NotificationService';
 
 const SettingsScreen = ({ navigation }) => {
   const [normalReward, setNormalReward] = useState(30); // Seconds for correct answer
@@ -367,6 +369,78 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={styles.testButtonText}>Add Test Time (5 min)</Text>
           </TouchableOpacity>
         </View>
+        
+        {/* Debug Section - Only show in development */}
+        {__DEV__ && (
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Icon name="bug" size={22} color="#FF9F1C" />
+              <Text style={styles.sectionTitle}>Debug Tools</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.testButton}
+              onPress={() => {
+                EnhancedTimerService.addTimeCredits(300); // Add 5 minutes
+                Alert.alert('Debug', 'Added 5 minutes of screen time');
+              }}
+            >
+              <Icon name="clock-plus-outline" size={22} color="white" />
+              <Text style={styles.testButtonText}>Add 5 Minutes Time</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.testButton}
+              onPress={() => {
+                const debug = EnhancedTimerService.getDebugInfo();
+                Alert.alert('Debug Info', 
+                  `Available Time: ${debug.formattedTime}\n` +
+                  `Is Tracking: ${debug.isRunning ? 'YES' : 'NO'}\n` +
+                  `App State: ${debug.isBrainBitesActive ? 'ACTIVE' : 'BACKGROUND'}\n` +
+                  `App State: ${debug.appState}\n` +
+                  `Has Timer: ${debug.hasTimer ? 'YES' : 'NO'}`
+                );
+              }}
+            >
+              <Icon name="information-outline" size={22} color="white" />
+              <Text style={styles.testButtonText}>Show Debug Info</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.testButton, { backgroundColor: '#F44336' }]}
+              onPress={() => {
+                const currentTime = EnhancedTimerService.getAvailableTime();
+                EnhancedTimerService.addTimeCredits(-currentTime);
+                Alert.alert('Debug', 'Cleared all screen time');
+              }}
+            >
+              <Icon name="delete-outline" size={22} color="white" />
+              <Text style={styles.testButtonText}>Clear All Time</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.testButton}
+              onPress={() => {
+                EnhancedTimerService.addTimeCredits(30); // Add 30 seconds
+                Alert.alert('Debug', 'Added 30 seconds - now press home button to test tracking');
+              }}
+            >
+              <Icon name="timer-outline" size={22} color="white" />
+              <Text style={styles.testButtonText}>Test 30s + Go to Home</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.testButton, { backgroundColor: '#9C27B0' }]}
+              onPress={() => {
+                NotificationService.testNotification();
+                Alert.alert('Debug', 'Test notification sent! Check your notification panel.');
+              }}
+            >
+              <Icon name="bell-ring-outline" size={22} color="white" />
+              <Text style={styles.testButtonText}>Test Notification</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         
         <View style={styles.footer}>
           <Icon name="brain" size={32} color="#FF9F1C" style={styles.footerIcon} />

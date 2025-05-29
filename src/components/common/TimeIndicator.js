@@ -1,3 +1,4 @@
+// src/components/common/TimeIndicator.js - Fixed version
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -10,25 +11,26 @@ import {
   Platform
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import TimerService from '../../services/TimerService';
+import EnhancedTimerService from '../../services/EnhancedTimerService';
 import theme from '../../styles/theme';
 
 const { width } = Dimensions.get('window');
 
 const TimeIndicator = ({ onPress, expanded = false }) => {
-  const [time, setTime] = useState(TimerService.getAvailableTime());
+  const [time, setTime] = useState(EnhancedTimerService.getAvailableTime());
   const [isExpanded, setIsExpanded] = useState(expanded);
   
-  // Animation values
+  // Animation values - separate native and non-native animations
   const expandAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current; // For pulsing (native driver)
+  const opacityAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current; // For text fade (native driver)
   
   useEffect(() => {
     // Subscribe to timer updates
-    const removeListener = TimerService.addEventListener(handleTimerEvent);
+    const removeListener = EnhancedTimerService.addEventListener(handleTimerEvent);
     
     // Start pulse animation for low time
-    if (time < 300) { // Less than 5 minutes
+    if (time < 300 && time > 0) { // Less than 5 minutes but more than 0
       startPulseAnimation();
     }
     
@@ -38,42 +40,62 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
   // Update animation when expanded prop changes
   useEffect(() => {
     setIsExpanded(expanded);
+    
+    // Animate expansion (width - can't use native driver)
     Animated.timing(expandAnim, {
       toValue: expanded ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false, // Width animation requires non-native driver
+      easing: Easing.inOut(Easing.ease),
+    }).start();
+    
+    // Animate text opacity (can use native driver)
+    Animated.timing(opacityAnim, {
+      toValue: expanded ? 1 : 0,
       duration: 200,
-      useNativeDriver: false, // FIXED: width interpolation requires useNativeDriver: false
+      useNativeDriver: true, // Opacity can use native driver
       easing: Easing.inOut(Easing.ease),
     }).start();
   }, [expanded]);
   
   // Start pulsing animation for low time
   const startPulseAnimation = () => {
-    Animated.loop(
+    const pulseSequence = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, {
+        Animated.timing(scaleAnim, {
           toValue: 1.1,
           duration: 500,
-          useNativeDriver: true, // Scale animations can use native driver
+          useNativeDriver: true, // Scale can use native driver
           easing: Easing.inOut(Easing.sin),
         }),
-        Animated.timing(pulseAnim, {
+        Animated.timing(scaleAnim, {
           toValue: 1,
           duration: 500,
           useNativeDriver: true,
           easing: Easing.inOut(Easing.sin),
         }),
       ])
-    ).start();
+    );
+    
+    pulseSequence.start();
+    
+    // Stop pulsing after time updates
+    return () => pulseSequence.stop();
   };
   
   // Handle timer events
   const handleTimerEvent = (event) => {
-    if (event.event === 'timeUpdate' || event.event === 'creditsAdded') {
-      setTime(TimerService.getAvailableTime());
+    if (event.event === 'timeUpdate' || event.event === 'creditsAdded' || event.event === 'timeLoaded') {
+      const newTime = EnhancedTimerService.getAvailableTime();
+      setTime(newTime);
       
-      // Start pulsing animation if time is low
-      if (TimerService.getAvailableTime() < 300 && !pulseAnim._animation) {
+      // Start pulsing animation if time is low and not already pulsing
+      if (newTime < 300 && newTime > 0 && !scaleAnim._animation) {
         startPulseAnimation();
+      } else if (newTime === 0 || newTime >= 300) {
+        // Stop pulsing if time is 0 or sufficient
+        scaleAnim.stopAnimation();
+        scaleAnim.setValue(1);
       }
     }
   };
@@ -83,10 +105,19 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
     const newState = !isExpanded;
     setIsExpanded(newState);
     
+    // Animate width expansion (non-native)
     Animated.timing(expandAnim, {
       toValue: newState ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false, // Width requires non-native
+      easing: Easing.inOut(Easing.ease),
+    }).start();
+    
+    // Animate text opacity (native)
+    Animated.timing(opacityAnim, {
+      toValue: newState ? 1 : 0,
       duration: 200,
-      useNativeDriver: false, // FIXED: width interpolation requires useNativeDriver: false
+      useNativeDriver: true, // Opacity can use native
       easing: Easing.inOut(Easing.ease),
     }).start();
     
@@ -103,7 +134,7 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
   };
   
   // Format time
-  const formattedTime = TimerService.formatTime(time);
+  const formattedTime = EnhancedTimerService.formatTime(time);
   
   return (
     <Animated.View
@@ -112,11 +143,13 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
         {
           width: expandAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [80, 150]
+            outputRange: [60, 140] // Smaller range to avoid overflow
           }),
           backgroundColor: getTimeColor(),
           transform: [
-            { scale: time < 300 ? pulseAnim : 1 }
+            { 
+              scale: time < 300 && time > 0 ? scaleAnim : 1 
+            }
           ]
         }
       ]}
@@ -126,21 +159,29 @@ const TimeIndicator = ({ onPress, expanded = false }) => {
         onPress={toggleExpanded}
         activeOpacity={0.8}
       >
-        <Icon name="timer-outline" size={isExpanded ? 18 : 20} color="white" />
+        <Icon 
+          name="timer-outline" 
+          size={isExpanded ? 16 : 20} 
+          color="white" 
+          style={styles.icon}
+        />
         
-        {/* FIXED: Remove width interpolation and use simpler approach */}
-        {isExpanded && (
-          <Animated.View
-            style={[
-              styles.timeTextContainer,
-              {
-                opacity: expandAnim,
-              }
-            ]}
-          >
-            <Text style={styles.timeText}>{formattedTime}</Text>
-          </Animated.View>
-        )}
+        <Animated.View
+          style={[
+            styles.timeTextContainer,
+            {
+              opacity: opacityAnim,
+              width: expandAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 70] // Fixed width for text
+              }),
+            }
+          ]}
+        >
+          <Text style={styles.timeText} numberOfLines={1}>
+            {formattedTime}
+          </Text>
+        </Animated.View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -160,16 +201,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     zIndex: 999,
+    overflow: 'hidden', // Prevent text overflow
   },
   touchable: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+  },
+  icon: {
+    marginRight: 4,
   },
   timeTextContainer: {
-    marginLeft: 8, // FIXED: Use static marginLeft instead of animated
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
   timeText: {
     color: 'white',
@@ -179,4 +224,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TimeIndicator; 
+export default TimeIndicator;
