@@ -9,6 +9,7 @@ import HomeScreen from '../screens/HomeScreen';
 import QuizScreen from '../screens/QuizScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
+import AudioTimerTestScreen from '../screens/AudioTimerTestScreen';
 
 // Note: AppSelectorScreen has been removed
 
@@ -52,6 +53,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Quiz" component={QuizScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="AudioTimerTest" component={AudioTimerTestScreen} />
         {/* AppSelectorScreen removed from navigation stack */}
       </Stack.Navigator>
     </NavigationContainer>

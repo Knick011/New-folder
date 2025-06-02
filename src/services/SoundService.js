@@ -1,14 +1,14 @@
-// src/services/SoundService.js
+// src/services/SoundService.js - Fixed version based on working examples from other apps
 import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Enable playback in silence mode (iOS)
+// Enable playback in silence mode (iOS) - This is crucial for iOS
 Sound.setCategory('Playback');
 
 /**
  * Sound Service using react-native-sound library
- * Manages all app sounds including effects and background music
+ * Fixed based on working examples from other React Native apps
  */
 class SoundService {
   constructor() {
@@ -20,17 +20,7 @@ class SoundService {
     this.STORAGE_KEY = 'brainbites_sounds_enabled';
     this.MUSIC_KEY = 'brainbites_music_enabled';
     
-    // Define sound files - different paths for iOS vs Android
-    this.soundFiles = {
-      buttonpress: 'buttonpress.mp3',
-      correct: 'correct.mp3',
-      incorrect: 'incorrect.mp3',
-      streak: 'streak.mp3',
-      menumusic: 'menumusic.mp3',
-      gamemusic: 'gamemusic.mp3',
-    };
-    
-    // Load settings and initialize
+    // Load settings first, then initialize
     this.loadSettings().then(() => {
       this.initSounds();
     });
@@ -65,35 +55,69 @@ class SoundService {
   
   initSounds() {
     return new Promise((resolve) => {
+      // Sound files mapping - these files need to be placed correctly
+      const soundFiles = {
+        buttonpress: 'buttonpress.mp3',
+        correct: 'correct.mp3', 
+        incorrect: 'incorrect.mp3',
+        streak: 'streak.mp3',
+        menumusic: 'menumusic.mp3',
+        gamemusic: 'gamemusic.mp3',
+      };
+      
       const loadPromises = [];
       
-      Object.entries(this.soundFiles).forEach(([key, filename]) => {
+      Object.entries(soundFiles).forEach(([key, filename]) => {
         loadPromises.push(
           new Promise((soundResolve) => {
-            // For Android, load from assets. For iOS, load from main bundle
-            const sound = new Sound(
-              filename,
-              Platform.OS === 'android' ? null : Sound.MAIN_BUNDLE, // null = assets folder for Android
-              (error) => {
+            // Different loading approach for Android vs iOS based on working examples
+            let sound;
+            
+            if (Platform.OS === 'android') {
+              // For Android: files should be in android/app/src/main/res/raw/
+              // Use null as basePath for raw resources
+              sound = new Sound(filename.replace('.mp3', ''), null, (error) => {
                 if (error) {
-                  console.error(`Failed to load sound ${filename}:`, error);
+                  console.error(`Failed to load Android sound ${filename}:`, error);
                   soundResolve(false);
                   return;
                 }
                 
-                console.log(`Successfully loaded sound: ${filename}`);
+                console.log(`Successfully loaded Android sound: ${filename}`);
                 this.sounds[key] = sound;
                 
-                // Set volume for music files
+                // Set volume for different types
                 if (key.includes('music')) {
-                  sound.setVolume(0.3); // Lower volume for background music
+                  sound.setVolume(0.3);
                 } else {
-                  sound.setVolume(0.8); // Higher volume for sound effects
+                  sound.setVolume(0.8);
                 }
                 
                 soundResolve(true);
-              }
-            );
+              });
+            } else {
+              // For iOS: files should be added to Xcode project bundle
+              // Use Sound.MAIN_BUNDLE for iOS
+              sound = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
+                if (error) {
+                  console.error(`Failed to load iOS sound ${filename}:`, error);
+                  soundResolve(false);
+                  return;
+                }
+                
+                console.log(`Successfully loaded iOS sound: ${filename}`);
+                this.sounds[key] = sound;
+                
+                // Set volume for different types
+                if (key.includes('music')) {
+                  sound.setVolume(0.3);
+                } else {
+                  sound.setVolume(0.8);
+                }
+                
+                soundResolve(true);
+              });
+            }
           })
         );
       });
@@ -126,13 +150,12 @@ class SoundService {
     
     const sound = this.sounds[soundName];
     if (!sound) {
-      console.warn(`Sound ${soundName} not loaded or failed to load`);
+      console.warn(`Sound ${soundName} not loaded`);
       return null;
     }
     
-    // Stop previous instance if playing
+    // Stop and reset before playing (important for reliability)
     sound.stop(() => {
-      // Reset to beginning
       sound.setCurrentTime(0);
       
       // Set volume if specified
@@ -155,11 +178,48 @@ class SoundService {
           console.log(`Successfully played sound: ${soundName}`);
         } else {
           console.error(`Sound playback failed for: ${soundName}`);
+          
+          // Try to reload the sound if playback failed
+          this.reloadSound(soundName);
         }
       });
     });
     
     return sound;
+  }
+  
+  // Reload a specific sound if it fails to play
+  reloadSound(soundName) {
+    const soundFiles = {
+      buttonpress: 'buttonpress.mp3',
+      correct: 'correct.mp3', 
+      incorrect: 'incorrect.mp3',
+      streak: 'streak.mp3',
+      menumusic: 'menumusic.mp3',
+      gamemusic: 'gamemusic.mp3',
+    };
+    
+    const filename = soundFiles[soundName];
+    if (!filename) return;
+    
+    console.log(`Reloading sound: ${soundName}`);
+    
+    let sound;
+    if (Platform.OS === 'android') {
+      sound = new Sound(filename.replace('.mp3', ''), null, (error) => {
+        if (!error) {
+          this.sounds[soundName] = sound;
+          console.log(`Successfully reloaded sound: ${soundName}`);
+        }
+      });
+    } else {
+      sound = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
+        if (!error) {
+          this.sounds[soundName] = sound;
+          console.log(`Successfully reloaded sound: ${soundName}`);
+        }
+      });
+    }
   }
   
   stop(soundName) {

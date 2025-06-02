@@ -1,81 +1,96 @@
-// src/services/EnhancedTimerService.js - Fixed version with original notifications
+// src/services/EnhancedTimerService.js - FIXED VERSION with correct import
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
+import TimerService from './TimerService';  // ✅ Import the CLASS
 
-class EnhancedTimerService {
+class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
   constructor() {
-    this.availableTime = 0; // in seconds
+    super();  // ✅ Call parent constructor
+    
+    // Enhanced state tracking
+    this.isBrainBitesActive = true;
+    this.lastUpdateTime = null;
+    this.backgroundStartTime = null;
+    this.foregroundStartTime = null;
     this.isRunning = false;
     this.timer = null;
-    this.startTime = null;
-    this.lastUpdateTime = null;
-    this.listeners = [];
-    this.STORAGE_KEY = 'brainbites_timer_data';
-    this.appState = AppState.currentState;
-    this.isBrainBitesActive = true;
     
-    // Load saved data on initialization
-    this.loadSavedTime();
+    // Override the parent's app state handler
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+    }
     
-    // Listen for app state changes
+    // Use the new AppState API pattern from working examples
     this.appStateSubscription = AppState.addEventListener('change', this._handleAppStateChange);
+    
+    console.log('Enhanced Timer Service initialized');
   }
   
-  // Enhanced app state change handler
+  // Enhanced app state change handler based on working examples
   _handleAppStateChange = (nextAppState) => {
-    console.log('App state changed from', this.appState, 'to', nextAppState);
-    const prevState = this.appState;
+    const previousState = this.appState;
     this.appState = nextAppState;
     
-    // App going to background - START tracking time
-    if (prevState === 'active' && nextAppState.match(/inactive|background/)) {
+    console.log(`App state changed: ${previousState} -> ${nextAppState}`);
+    
+    // App going to background (user switched apps or minimized)
+    if (previousState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
+      console.log('App went to background - starting time tracking');
       this.isBrainBitesActive = false;
-      this._startTracking();
-      console.log('App went to background - STARTING time tracking');
+      this.backgroundStartTime = Date.now();
+      this._startBackgroundTracking();
     } 
-    // App coming to foreground - STOP tracking time
-    else if (prevState.match(/inactive|background/) && nextAppState === 'active') {
+    // App coming to foreground (user returned to app)
+    else if ((previousState === 'background' || previousState === 'inactive') && nextAppState === 'active') {
+      console.log('App came to foreground - stopping time tracking');
       this.isBrainBitesActive = true;
-      this._stopTracking();
-      console.log('App came to foreground - STOPPING time tracking');
+      this.foregroundStartTime = Date.now();
+      this._stopBackgroundTracking();
     }
+    
+    // Notify listeners of app state change
+    this._notifyListeners('appStateChanged', { 
+      previousState, 
+      currentState: nextAppState,
+      isBrainBitesActive: this.isBrainBitesActive 
+    });
   }
   
   // Start tracking time when app goes to background
-  _startTracking() {
-    // Only start if we have time and not already tracking
+  _startBackgroundTracking() {
+    // Only start tracking if we have available time and not already running
     if (this.availableTime > 0 && !this.isRunning) {
+      console.log('Starting background time tracking with', this.availableTime, 'seconds available');
+      
       this.isRunning = true;
-      this.startTime = Date.now();
       this.lastUpdateTime = Date.now();
       
       // Update timer every second
-      this.timer = setInterval(() => this._updateTime(), 1000);
+      this.timer = setInterval(() => {
+        this._updateBackgroundTime();
+      }, 1000);
       
       // Notify listeners
-      this._notifyListeners('trackingStarted', { availableTime: this.availableTime });
-      
-      // Schedule notifications for low time warnings (only on real devices)
-      try {
-        this._scheduleTimeNotifications();
-      } catch (error) {
-        console.log('Notification scheduling skipped (likely AVD):', error.message);
-      }
-      
-      console.log(`Started tracking ${this.availableTime} seconds of time`);
-    } else {
-      console.log('Cannot start tracking:', {
-        hasTime: this.availableTime > 0,
-        alreadyRunning: this.isRunning,
-        availableTime: this.availableTime
+      this._notifyListeners('backgroundTrackingStarted', { 
+        availableTime: this.availableTime,
+        startTime: this.backgroundStartTime
       });
+      
+      // Schedule low time notifications
+      this._scheduleTimeNotifications();
+    } else if (this.availableTime <= 0) {
+      console.log('No time available - not starting background tracking');
+    } else if (this.isRunning) {
+      console.log('Background tracking already running');
     }
   }
   
   // Stop tracking when app comes to foreground
-  _stopTracking() {
+  _stopBackgroundTracking() {
     if (this.isRunning) {
+      console.log('Stopping background time tracking');
+      
       this.isRunning = false;
       
       // Clear the timer
@@ -84,26 +99,33 @@ class EnhancedTimerService {
         this.timer = null;
       }
       
-      // Update time one last time
-      this._updateTime();
+      // Final time update
+      this._updateBackgroundTime();
       
-      // Cancel scheduled notifications since tracking is stopped
-      try {
-        NotificationService.cancelTimeNotifications();
-      } catch (error) {
-        console.log('Notification cancellation skipped (likely AVD):', error.message);
-      }
+      // Calculate total background time
+      const backgroundDuration = this.foregroundStartTime - this.backgroundStartTime;
+      const backgroundSeconds = Math.floor(backgroundDuration / 1000);
       
       // Notify listeners
-      this._notifyListeners('trackingStopped', { availableTime: this.availableTime });
+      this._notifyListeners('backgroundTrackingStopped', { 
+        availableTime: this.availableTime,
+        backgroundDuration: backgroundSeconds,
+        endTime: this.foregroundStartTime
+      });
       
-      console.log(`Stopped tracking. Remaining time: ${this.availableTime} seconds`);
+      // Cancel scheduled notifications since tracking stopped
+      NotificationService.cancelTimeNotifications();
+      
+      // Save the updated time
+      this.saveTimeData();
     }
   }
   
-  // Update the time counter (decreases available time)
-  _updateTime() {
-    if (!this.isRunning || !this.startTime || this.isBrainBitesActive) return;
+  // Update time during background tracking
+  _updateBackgroundTime() {
+    if (!this.isRunning || !this.lastUpdateTime) {
+      return;
+    }
     
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - this.lastUpdateTime) / 1000);
@@ -113,7 +135,7 @@ class EnhancedTimerService {
       const previousTime = this.availableTime;
       this.availableTime = Math.max(0, this.availableTime - elapsedSeconds);
       
-      console.log(`Time update: ${previousTime} -> ${this.availableTime} (spent ${elapsedSeconds}s)`);
+      console.log(`Background time update: -${elapsedSeconds}s, remaining: ${this.availableTime}s`);
       
       // Update last update time
       this.lastUpdateTime = now;
@@ -122,16 +144,19 @@ class EnhancedTimerService {
       this._notifyListeners('timeUpdate', { 
         remaining: this.availableTime,
         elapsed: elapsedSeconds,
-        total: previousTime
+        previousTime: previousTime,
+        isBackground: true
       });
       
       // Check if time expired
       if (this.availableTime <= 0) {
+        console.log('Time expired during background tracking');
         this._handleTimeExpired();
       }
       
-      // Save time periodically (every 10 seconds)
-      if (Math.floor((now - this.startTime) / 1000) % 10 === 0) {
+      // Save time periodically (every 10 seconds during background)
+      const totalBackgroundTime = Math.floor((now - this.backgroundStartTime) / 1000);
+      if (totalBackgroundTime % 10 === 0) {
         this.saveTimeData();
       }
     }
@@ -139,190 +164,158 @@ class EnhancedTimerService {
   
   // Handle time expiration
   _handleTimeExpired() {
-    console.log('Time expired!');
-    this._stopTracking();
-    this._notifyListeners('timeExpired');
+    console.log('Time has expired - stopping tracking and sending notification');
     
-    // Show time expired notification (try/catch for AVD)
-    try {
-      NotificationService.showTimeExpiredNotification();
-    } catch (error) {
-      console.log('Time expired notification skipped (likely AVD):', error.message);
-    }
+    this._stopBackgroundTracking();
+    this._notifyListeners('timeExpired', {
+      expiredDuring: this.isBrainBitesActive ? 'foreground' : 'background'
+    });
     
-    // Save the expired state
-    this.saveTimeData();
+    // Show time expired notification
+    NotificationService.showTimeExpiredNotification();
   }
   
-  // Schedule low time notifications
+  // Schedule notifications for low time warnings
   _scheduleTimeNotifications() {
-    // Only schedule if we have time tracking active
-    if (!this.isRunning) return;
-    
-    // Cancel any existing notifications first
-    try {
-      NotificationService.cancelTimeNotifications();
-    } catch (error) {
-      // Ignore errors on AVD
+    if (!this.isRunning || this.availableTime <= 0) {
       return;
     }
     
+    console.log('Scheduling time notifications for', this.availableTime, 'seconds remaining');
+    
+    // Cancel any existing notifications first
+    NotificationService.cancelTimeNotifications();
+    
     // Schedule notification at 5 minutes remaining
     if (this.availableTime > 300) {
-      const timeUntil5Min = this.availableTime - 300; // seconds until 5 min remaining
-      try {
-        NotificationService.scheduleLowTimeNotification(5, timeUntil5Min);
-        console.log(`Scheduled 5-minute warning in ${timeUntil5Min} seconds`);
-      } catch (error) {
-        console.log('5-minute notification scheduling failed (likely AVD)');
-      }
+      const timeUntil5Min = this.availableTime - 300;
+      NotificationService.scheduleLowTimeNotification(5, timeUntil5Min);
+      console.log('Scheduled 5-minute warning in', timeUntil5Min, 'seconds');
     }
     
-    // Schedule notification at 1 minute remaining
+    // Schedule notification at 1 minute remaining  
     if (this.availableTime > 60) {
-      const timeUntil1Min = this.availableTime - 60; // seconds until 1 min remaining
-      try {
-        NotificationService.scheduleLowTimeNotification(1, timeUntil1Min);
-        console.log(`Scheduled 1-minute warning in ${timeUntil1Min} seconds`);
-      } catch (error) {
-        console.log('1-minute notification scheduling failed (likely AVD)');
-      }
+      const timeUntil1Min = this.availableTime - 60;
+      NotificationService.scheduleLowTimeNotification(1, timeUntil1Min);
+      console.log('Scheduled 1-minute warning in', timeUntil1Min, 'seconds');
     }
   }
   
-  // Add time credits (rewards for correct answers)
-  addTimeCredits(seconds) {
-    this.availableTime += seconds;
-    console.log(`Added ${seconds} seconds. New total: ${this.availableTime} seconds`);
-    
-    // If we're currently tracking and time was 0, restart tracking
-    if (!this.isBrainBitesActive && !this.isRunning && this.availableTime > 0) {
-      this._startTracking();
-    }
-    
-    this.saveTimeData();
-    this._notifyListeners('creditsAdded', { seconds, newTotal: this.availableTime });
-    return this.availableTime;
-  }
-  
-  // Get current available time
-  getAvailableTime() {
-    return this.availableTime;
-  }
-  
-  // Load saved time from storage
+  // Override loadSavedTime to handle background state restoration
   async loadSavedTime() {
+    console.log('Loading saved time data...');
+    
     try {
       const data = await AsyncStorage.getItem(this.STORAGE_KEY);
       if (data) {
         const parsedData = JSON.parse(data);
         this.availableTime = parsedData.availableTime || 0;
         
-        console.log(`Loaded saved time: ${this.availableTime} seconds`);
+        console.log('Loaded available time:', this.availableTime);
         
-        // If there was tracking active when app was closed, we need to account for elapsed time
-        if (parsedData.wasTracking && parsedData.lastUpdateTime) {
-          const timeSinceLastUpdate = Math.floor((Date.now() - parsedData.lastUpdateTime) / 1000);
-          if (timeSinceLastUpdate > 0) {
-            this.availableTime = Math.max(0, this.availableTime - timeSinceLastUpdate);
-            console.log(`Adjusted for ${timeSinceLastUpdate}s elapsed since last update. New time: ${this.availableTime}s`);
+        // Check if app was backgrounded when it was closed
+        if (parsedData.wasBackgroundTracking && parsedData.backgroundStartTime) {
+          const now = Date.now();
+          const backgroundStartTime = parsedData.backgroundStartTime;
+          const elapsedBackgroundTime = Math.floor((now - backgroundStartTime) / 1000);
+          
+          console.log('App was closed during background tracking');
+          console.log('Elapsed background time since close:', elapsedBackgroundTime, 'seconds');
+          
+          // Deduct the time that passed while app was closed
+          if (elapsedBackgroundTime > 0 && this.availableTime > 0) {
+            const adjustedTime = Math.max(0, this.availableTime - elapsedBackgroundTime);
+            const deductedTime = this.availableTime - adjustedTime;
+            
+            this.availableTime = adjustedTime;
+            
+            console.log('Deducted', deductedTime, 'seconds for time spent closed');
+            console.log('Adjusted available time:', this.availableTime);
+            
+            // Save the adjusted time
+            await this.saveTimeData();
           }
         }
-      } else {
-        console.log('No saved time data found');
-      }
-      
-      // If app is not active and we have time, start tracking
-      if (!this.isBrainBitesActive && this.availableTime > 0) {
-        this._startTracking();
+        
+        // If we still have time and app is likely to go to background, prepare for tracking
+        if (this.availableTime > 0 && !this.isBrainBitesActive) {
+          // Don't start tracking immediately, wait for proper app state change
+          console.log('App loaded with time available, ready for background tracking');
+        }
       }
       
       this._notifyListeners('timeLoaded', { availableTime: this.availableTime });
+      return this.availableTime;
+      
     } catch (error) {
       console.error('Error loading saved time:', error);
+      return 0;
     }
   }
   
-  // Save current time state to storage
+  // Override saveTimeData to include background tracking state
   async saveTimeData() {
     try {
       const data = {
         availableTime: this.availableTime,
-        lastUpdateTime: Date.now(),
-        wasTracking: this.isRunning,
-        lastSaved: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
+        wasBackgroundTracking: this.isRunning && !this.isBrainBitesActive,
+        backgroundStartTime: this.backgroundStartTime,
+        appState: this.appState
       };
+      
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
-      console.log(`Saved time data: ${this.availableTime} seconds`);
+      console.log('Saved time data:', data);
+      
     } catch (error) {
       console.error('Error saving time data:', error);
     }
   }
   
-  // Format seconds to MM:SS or HH:MM:SS
-  formatTime(seconds) {
-    if (seconds < 0) seconds = 0;
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-    } else {
-      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-    }
-  }
-  
-  // Add event listener
-  addEventListener(callback) {
-    this.listeners.push(callback);
-    return () => {
-      this.listeners = this.listeners.filter(listener => listener !== callback);
-    };
-  }
-  
-  // Notify all listeners
-  _notifyListeners(event, data = {}) {
-    this.listeners.forEach(listener => {
-      listener({ event, ...data });
-    });
-  }
-  
-  // Get debug info
-  getDebugInfo() {
+  // Get current tracking status
+  getTrackingStatus() {
     return {
-      availableTime: this.availableTime,
-      isRunning: this.isRunning,
+      isTracking: this.isRunning,
       isBrainBitesActive: this.isBrainBitesActive,
       appState: this.appState,
-      hasTimer: !!this.timer,
-      formattedTime: this.formatTime(this.availableTime)
+      availableTime: this.availableTime,
+      backgroundStartTime: this.backgroundStartTime,
+      lastUpdateTime: this.lastUpdateTime
     };
   }
   
-  // Cleanup
+  // Force start tracking (for testing)
+  forceStartTracking() {
+    console.log('Force starting background tracking');
+    this.isBrainBitesActive = false;
+    this.backgroundStartTime = Date.now();
+    this._startBackgroundTracking();
+  }
+  
+  // Force stop tracking (for testing)
+  forceStopTracking() {
+    console.log('Force stopping background tracking');
+    this.isBrainBitesActive = true;
+    this.foregroundStartTime = Date.now();
+    this._stopBackgroundTracking();
+  }
+  
+  // Override cleanup to handle enhanced features
   cleanup() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+    console.log('Cleaning up Enhanced Timer Service');
+    
+    // Stop background tracking if running
+    if (this.isRunning) {
+      this._stopBackgroundTracking();
     }
     
-    if (this.appStateSubscription) {
-      this.appStateSubscription.remove();
-      this.appStateSubscription = null;
-    }
+    // Call parent cleanup
+    super.cleanup();
     
-    // Save final state
-    this.saveTimeData();
-    
-    // Cancel all notifications (with error handling for AVD)
-    try {
-      NotificationService.cancelAllNotifications();
-    } catch (error) {
-      console.log('Notification cleanup skipped (likely AVD):', error.message);
-    }
+    // Cancel all notifications
+    NotificationService.cancelAllNotifications();
   }
 }
 
+// Create and export a single instance
 export default new EnhancedTimerService();

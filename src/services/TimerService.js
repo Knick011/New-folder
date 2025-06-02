@@ -1,4 +1,4 @@
-// src/services/TimerService.js
+// src/services/TimerService.js - FIXED VERSION with proper export
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 
@@ -291,5 +291,5 @@ class TimerService {
   }
 }
 
-const timerServiceInstance = new TimerService();
-export default timerServiceInstance;
+// Export the class instead of an instance
+export default TimerService;
