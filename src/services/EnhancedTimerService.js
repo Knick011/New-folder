@@ -1,12 +1,13 @@
-// src/services/EnhancedTimerService.js - FIXED VERSION with correct import
+// src/services/EnhancedTimerService.js - FIXED VERSION
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
-import TimerService from './TimerService';  // ✅ Import the CLASS
+import TimerService from './TimerService';  // ✅ Import the INSTANCE (not class)
 
-class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
+class EnhancedTimerService {
   constructor() {
-    super();  // ✅ Call parent constructor
+    // Copy all properties from TimerService instance
+    Object.assign(this, TimerService);
     
     // Enhanced state tracking
     this.isBrainBitesActive = true;
@@ -14,7 +15,7 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
     this.backgroundStartTime = null;
     this.foregroundStartTime = null;
     this.isRunning = false;
-    this.timer = null;
+    this.backgroundTimer = null; // Separate from TimerService timer
     
     // Override the parent's app state handler
     if (this.appStateSubscription) {
@@ -67,12 +68,12 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
       this.lastUpdateTime = Date.now();
       
       // Update timer every second
-      this.timer = setInterval(() => {
+      this.backgroundTimer = setInterval(() => {
         this._updateBackgroundTime();
       }, 1000);
       
       // Notify listeners
-      this._notifyListeners('backgroundTrackingStarted', { 
+      this._notifyListeners('trackingStarted', { 
         availableTime: this.availableTime,
         startTime: this.backgroundStartTime
       });
@@ -94,9 +95,9 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
       this.isRunning = false;
       
       // Clear the timer
-      if (this.timer) {
-        clearInterval(this.timer);
-        this.timer = null;
+      if (this.backgroundTimer) {
+        clearInterval(this.backgroundTimer);
+        this.backgroundTimer = null;
       }
       
       // Final time update
@@ -107,14 +108,18 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
       const backgroundSeconds = Math.floor(backgroundDuration / 1000);
       
       // Notify listeners
-      this._notifyListeners('backgroundTrackingStopped', { 
+      this._notifyListeners('trackingStopped', { 
         availableTime: this.availableTime,
         backgroundDuration: backgroundSeconds,
         endTime: this.foregroundStartTime
       });
       
       // Cancel scheduled notifications since tracking stopped
-      NotificationService.cancelTimeNotifications();
+      try {
+        NotificationService.cancelTimeNotifications();
+      } catch (error) {
+        console.log('Notification service error (likely simulator):', error.message);
+      }
       
       // Save the updated time
       this.saveTimeData();
@@ -172,7 +177,11 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
     });
     
     // Show time expired notification
-    NotificationService.showTimeExpiredNotification();
+    try {
+      NotificationService.showTimeExpiredNotification();
+    } catch (error) {
+      console.log('Notification service error (likely simulator):', error.message);
+    }
   }
   
   // Schedule notifications for low time warnings
@@ -183,21 +192,25 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
     
     console.log('Scheduling time notifications for', this.availableTime, 'seconds remaining');
     
-    // Cancel any existing notifications first
-    NotificationService.cancelTimeNotifications();
-    
-    // Schedule notification at 5 minutes remaining
-    if (this.availableTime > 300) {
-      const timeUntil5Min = this.availableTime - 300;
-      NotificationService.scheduleLowTimeNotification(5, timeUntil5Min);
-      console.log('Scheduled 5-minute warning in', timeUntil5Min, 'seconds');
-    }
-    
-    // Schedule notification at 1 minute remaining  
-    if (this.availableTime > 60) {
-      const timeUntil1Min = this.availableTime - 60;
-      NotificationService.scheduleLowTimeNotification(1, timeUntil1Min);
-      console.log('Scheduled 1-minute warning in', timeUntil1Min, 'seconds');
+    try {
+      // Cancel any existing notifications first
+      NotificationService.cancelTimeNotifications();
+      
+      // Schedule notification at 5 minutes remaining
+      if (this.availableTime > 300) {
+        const timeUntil5Min = this.availableTime - 300;
+        NotificationService.scheduleLowTimeNotification(5, timeUntil5Min);
+        console.log('Scheduled 5-minute warning in', timeUntil5Min, 'seconds');
+      }
+      
+      // Schedule notification at 1 minute remaining  
+      if (this.availableTime > 60) {
+        const timeUntil1Min = this.availableTime - 60;
+        NotificationService.scheduleLowTimeNotification(1, timeUntil1Min);
+        console.log('Scheduled 1-minute warning in', timeUntil1Min, 'seconds');
+      }
+    } catch (error) {
+      console.log('Notification scheduling error (likely simulator):', error.message);
     }
   }
   
@@ -284,6 +297,20 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
     };
   }
   
+  // ✅ FIXED: Add missing getDebugInfo method
+  getDebugInfo() {
+    return {
+      availableTime: this.availableTime,
+      formattedTime: this.formatTime(this.availableTime),
+      isRunning: this.isRunning,
+      isBrainBitesActive: this.isBrainBitesActive,
+      appState: this.appState,
+      hasTimer: !!this.backgroundTimer,
+      backgroundStartTime: this.backgroundStartTime,
+      lastUpdateTime: this.lastUpdateTime
+    };
+  }
+  
   // Force start tracking (for testing)
   forceStartTracking() {
     console.log('Force starting background tracking');
@@ -309,13 +336,26 @@ class EnhancedTimerService extends TimerService {  // ✅ Extend the CLASS
       this._stopBackgroundTracking();
     }
     
-    // Call parent cleanup
-    super.cleanup();
+    // Clear background timer
+    if (this.backgroundTimer) {
+      clearInterval(this.backgroundTimer);
+      this.backgroundTimer = null;
+    }
+    
+    // Remove app state listener
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+      this.appStateSubscription = null;
+    }
     
     // Cancel all notifications
-    NotificationService.cancelAllNotifications();
+    try {
+      NotificationService.cancelAllNotifications();
+    } catch (error) {
+      console.log('Notification cleanup error (likely simulator):', error.message);
+    }
   }
 }
 
-// Create and export a single instance
+// ✅ FIXED: Export singleton instance
 export default new EnhancedTimerService();

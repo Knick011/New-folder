@@ -291,5 +291,5 @@ class TimerService {
   }
 }
 
-// Export the class instead of an instance
-export default TimerService;
+// ✅ FIXED: Export singleton instance (not the class)
+export default new TimerService();
