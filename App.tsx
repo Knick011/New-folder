@@ -13,7 +13,7 @@ import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 // Import services
-import EnhancedTimerService from './src/services/EnhancedTimerService';
+import NativeTimerService from './src/services/NativeTimerService';
 import SoundService from './src/services/SoundService';
 import QuizService from './src/services/QuizService';
 import ScoreService from './src/services/ScoreService';
@@ -31,6 +31,14 @@ type RootStackParamList = {
   Quiz: { category?: string };
   Settings: undefined;
 };
+
+interface TimerEvent {
+  event: string;
+  remaining?: number;
+  seconds?: number;
+  isTracking?: boolean;
+  isAppForeground?: boolean;
+}
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -52,7 +60,7 @@ const App = () => {
         // Initialize sound service
         try {
           console.log("✓ Sound service ready");
-        } catch (err) {
+        } catch (err: unknown) {
           console.warn("Sound initialization error:", err);
         }
         
@@ -70,27 +78,25 @@ const App = () => {
             const PushNotificationIOS = require('@react-native-community/push-notification-ios');
             const permissions = await PushNotificationIOS.requestPermissions();
             console.log('✓ iOS notification permissions:', permissions);
-          } catch (error) {
-            console.log('iOS notification permission error (likely AVD):', error.message);
+          } catch (error: unknown) {
+            console.log('iOS notification permission error (likely AVD):', (error as Error).message);
           }
         }
         
         // Initialize timer service
-        await EnhancedTimerService.loadSavedTime();
-        console.log("✓ Enhanced timer service initialized");
+        await NativeTimerService.loadSavedTime();
+        console.log("✓ Native timer service initialized");
         
         // Add timer event listener for debugging
-        EnhancedTimerService.addEventListener((event) => {
+        NativeTimerService.addEventListener((event: TimerEvent) => {
           console.log('Timer Event:', event);
           
           // Update debug info
-          setDebugInfo(EnhancedTimerService.getDebugInfo());
+          setDebugInfo(NativeTimerService.getDebugInfo());
           
           // Log important events
-          if (event.event === 'trackingStarted') {
-            console.log('🟢 Timer started tracking screen time');
-          } else if (event.event === 'trackingStopped') {
-            console.log('🔴 Timer stopped tracking screen time');
+          if (event.event === 'timeUpdate') {
+            console.log('⏱️ Timer update:', event.remaining, 'seconds remaining');
           } else if (event.event === 'timeExpired') {
             console.log('⏰ Screen time expired!');
           } else if (event.event === 'creditsAdded') {
@@ -99,18 +105,18 @@ const App = () => {
         });
         
         // Get initial debug info
-        setDebugInfo(EnhancedTimerService.getDebugInfo());
+        setDebugInfo(NativeTimerService.getDebugInfo());
         
         // Schedule initial reminders (with error handling for AVD)
         try {
-          const availableTime = EnhancedTimerService.getAvailableTime();
+          const availableTime = NativeTimerService.getAvailableTime();
           if (availableTime <= 300) {
             NotificationService.scheduleEarnTimeReminder(4);
           }
           NotificationService.scheduleStreakReminder();
           console.log("✓ Notifications scheduled");
-        } catch (error) {
-          console.log('Notification scheduling skipped (likely AVD):', error.message);
+        } catch (error: unknown) {
+          console.log('Notification scheduling skipped (likely AVD):', (error as Error).message);
         }
         
         setTimeout(() => {
@@ -118,7 +124,7 @@ const App = () => {
           console.log("🚀 BrainBites initialization complete!");
         }, 1000);
         
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("❌ Error initializing services:", error);
         setIsInitializing(false);
       }
@@ -127,16 +133,16 @@ const App = () => {
     initializeServices();
     
     return () => {
-      EnhancedTimerService.cleanup();
+      NativeTimerService.cleanup();
       try {
         SoundService.cleanup();
-      } catch (error) {
-        console.log('Sound cleanup error (expected):', error.message);
+      } catch (error: unknown) {
+        console.log('Sound cleanup error (expected):', (error as Error).message);
       }
       try {
         NotificationService.cancelAllNotifications();
-      } catch (error) {
-        console.log('Notification cleanup error (likely AVD):', error.message);
+      } catch (error: unknown) {
+        console.log('Notification cleanup error (likely AVD):', (error as Error).message);
       }
     };
   }, []);
