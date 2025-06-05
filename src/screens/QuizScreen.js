@@ -19,9 +19,8 @@ import TimerService from '../services/TimerService';
 import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
-import { Platform } from 'react-native';
-import EnhancedTimerService from './EnhancedTimerService';
-import NativeTimerService from './NativeTimerService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
+import NativeTimerService from '../services/NativeTimerService';
 
 const QuizScreen = ({ navigation, route }) => {
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -249,7 +248,7 @@ const QuizScreen = ({ navigation, route }) => {
           useNativeDriver: true,
           easing: Easing.out(Easing.back(1.5)),
         }),
-        Animated.delay(1200),
+        Animated.delay(1500), // Longer delay to see the points
         Animated.timing(pointsAnim, {
           toValue: 0,
           duration: 300,
@@ -257,69 +256,109 @@ const QuizScreen = ({ navigation, route }) => {
           easing: Easing.in(Easing.cubic),
         }),
       ]).start(() => {
-        setShowPointsAnimation(false);
+        // Fix useInsertionEffect error
+        setTimeout(() => {
+          setShowPointsAnimation(false);
+        }, 0);
       });
       
       // Animate streak counter
       Animated.sequence([
         Animated.timing(streakAnim, {
-          toValue: 1.2,
-          duration: 300,
+          toValue: 1.3,
+          duration: 400,
           useNativeDriver: true,
           easing: Easing.out(Easing.cubic),
         }),
         Animated.timing(streakAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 400,
           useNativeDriver: true,
           easing: Easing.inOut(Easing.cubic),
         }),
       ]).start();
       
-      // Handle milestone (every 5 correct answers)
+      // Handle milestone FIRST before regular rewards
       if (scoreResult.isStreakMilestone) {
-        // Add more time for milestones - 2 minutes (120 seconds)
+        console.log('🎉 STREAK MILESTONE REACHED:', scoreResult.currentStreak);
+        
+        // Add milestone bonus time - 2 minutes (120 seconds)
         TimerService.addTimeCredits(120);
+        
+        // Play streak sound
         SoundService.playStreak();
-        showMascotForStreak(scoreResult.currentStreak);
+        
+        // Show streak celebration mascot (IMPORTANT: Before explanation)
+        setTimeout(() => {
+          showMascotForStreak(scoreResult.currentStreak);
+        }, 800); // Show after points animation starts
+        
+        // Show explanation much later
+        setTimeout(() => {
+          setShowExplanation(true);
+          showExplanationWithAnimation();
+        }, 3000); // 3 seconds to see streak celebration
+        
       } else {
-        // Regular reward - 30 seconds
+        // Regular correct answer
         TimerService.addTimeCredits(30);
         SoundService.playCorrect();
-        // No mascot popup for regular correct answers
+        
+        // Show explanation sooner for regular answers
+        setTimeout(() => {
+          setShowExplanation(true);
+          showExplanationWithAnimation();
+        }, 1200);
       }
     } else {
-      // Reset streak on wrong answer
+      // Wrong answer
       setStreak(0);
       SoundService.playIncorrect();
-      showMascotForWrongAnswer();
+      
+      // Show mascot for wrong answer
+      setTimeout(() => {
+        showMascotForWrongAnswer();
+      }, 500);
+      
+      // Show explanation after mascot
+      setTimeout(() => {
+        setShowExplanation(true);
+        showExplanationWithAnimation();
+      }, 2000);
     }
-    
-    // Show explanation with a delay
-    setTimeout(() => {
-      setShowExplanation(true);
-      showExplanationWithAnimation();
-    }, correct ? 500 : 1500); // Longer delay for wrong answers to show mascot first
   };
   
   const showExplanationWithAnimation = () => {
-    // Start explanation animation
-    Animated.spring(explanationAnim, {
-      toValue: 1,
-      friction: 7,
-      tension: 40,
+    Animated.timing(explanationAnim, {
+      toValue: 0,
+      duration: 300,
       useNativeDriver: true,
-    }).start();
+      easing: Easing.in(Easing.cubic),
+    }).start(() => {
+      // Defer state updates
+      setTimeout(() => {
+        setShowExplanation(false);
+        loadQuestion();
+      }, 0);
+    });
   };
   
   const showMascotForStreak = (streakCount) => {
-    if (streakCount >= 10) {
-      setMascotType('excited');
-      setMascotMessage(`🔥 INCREDIBLE STREAK! ${streakCount} in a row! 🔥\n\nYou're absolutely unstoppable!\nYou earned 2 bonus minutes! 🎉`);
+    console.log('🔥 Showing streak celebration for:', streakCount);
+    
+    let message = '';
+    let mascotType = 'excited';
+    
+    if (streakCount >= 15) {
+      message = `🔥 LEGENDARY STREAK! ${streakCount} in a row! 🔥\n\nYou're absolutely UNSTOPPABLE! 🚀\nYou earned 2 bonus minutes!\n\nYou're a true Brain Bites master! 👑`;
+    } else if (streakCount >= 10) {
+      message = `🔥 INCREDIBLE STREAK! ${streakCount} correct! 🔥\n\nYou're on fire! Amazing work! 🌟\nYou earned 2 bonus minutes!\n\nKeep this momentum going! 💪`;
     } else if (streakCount >= 5) {
-      setMascotType('excited');
-      setMascotMessage(`🎉 STREAK MILESTONE! ${streakCount} correct! 🎉\n\nAmazing work!\nYou earned 2 bonus minutes! ⏰`);
+      message = `🎉 STREAK MILESTONE! ${streakCount} correct! 🎉\n\nFantastic job! You're doing great! ⭐\nYou earned 2 bonus minutes of app time!\n\nCan you reach ${Math.ceil(streakCount/5)*5 + 5}? 🎯`;
     }
+    
+    setMascotType(mascotType);
+    setMascotMessage(message);
     setShowMascot(true);
   };
 
@@ -362,16 +401,22 @@ const QuizScreen = ({ navigation, route }) => {
     // Hide mascot if still showing
     setShowMascot(false);
     
-    // Hide explanation with animation
-    Animated.timing(explanationAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.in(Easing.cubic),
-    }).start(() => {
-      setShowExplanation(false);
-      loadQuestion();
-    });
+    // Add a small delay before starting next question
+    setTimeout(() => {
+      // Hide explanation with animation
+      Animated.timing(explanationAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+      }).start(() => {
+        // Fix useInsertionEffect error
+        setTimeout(() => {
+          setShowExplanation(false);
+          loadQuestion();
+        }, 0);
+      });
+    }, 100); // Small delay to prevent accidental double-tap
   };
   
   const handleGoBack = () => {

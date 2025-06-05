@@ -13,7 +13,7 @@ import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 // Import services
-import NativeTimerService from './src/services/NativeTimerService';
+import TimerService from './src/services/TimerService';
 import SoundService from './src/services/SoundService';
 import QuizService from './src/services/QuizService';
 import ScoreService from './src/services/ScoreService';
@@ -84,15 +84,21 @@ const App = () => {
         }
         
         // Initialize timer service
-        await NativeTimerService.loadSavedTime();
-        console.log("✓ Native timer service initialized");
+        await TimerService.loadSavedTime();
+        console.log("✓ Timer service initialized");
         
         // Add timer event listener for debugging
-        NativeTimerService.addEventListener((event: TimerEvent) => {
+        TimerService.addEventListener((event: any) => {
           console.log('Timer Event:', event);
           
           // Update debug info
-          setDebugInfo(NativeTimerService.getDebugInfo());
+          setDebugInfo({
+            availableTime: TimerService.getAvailableTime(),
+            formattedTime: TimerService.formatTime(TimerService.getAvailableTime()),
+            isRunning: event.event === 'trackingStarted',
+            isBrainBitesActive: event.event !== 'trackingStarted',
+            appState: 'monitoring'
+          });
           
           // Log important events
           if (event.event === 'timeUpdate') {
@@ -101,15 +107,25 @@ const App = () => {
             console.log('⏰ Screen time expired!');
           } else if (event.event === 'creditsAdded') {
             console.log(`💰 Added ${event.seconds} seconds of screen time`);
+          } else if (event.event === 'trackingStarted') {
+            console.log('📱 Background time tracking started');
+          } else if (event.event === 'trackingStopped') {
+            console.log('📱 Background time tracking stopped');
           }
         });
         
         // Get initial debug info
-        setDebugInfo(NativeTimerService.getDebugInfo());
+        setDebugInfo({
+          availableTime: TimerService.getAvailableTime(),
+          formattedTime: TimerService.formatTime(TimerService.getAvailableTime()),
+          isRunning: false,
+          isBrainBitesActive: true,
+          appState: 'active'
+        });
         
         // Schedule initial reminders (with error handling for AVD)
         try {
-          const availableTime = NativeTimerService.getAvailableTime();
+          const availableTime = TimerService.getAvailableTime();
           if (availableTime <= 300) {
             NotificationService.scheduleEarnTimeReminder(4);
           }
@@ -133,7 +149,7 @@ const App = () => {
     initializeServices();
     
     return () => {
-      NativeTimerService.cleanup();
+      TimerService.cleanup();
       try {
         SoundService.cleanup();
       } catch (error: unknown) {

@@ -21,9 +21,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../styles/theme';
 import commonStyles from '../styles/commonStyles';
 import TimeSpeechBubble from '../components/common/TimeSpeechBubble';
-import { Platform } from 'react-native';
-import EnhancedTimerService from './EnhancedTimerService';
-import NativeTimerService from './NativeTimerService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
+import NativeTimerService from '../services/NativeTimerService';
 
 const { width } = Dimensions.get('window');
 

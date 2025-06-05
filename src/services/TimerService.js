@@ -1,11 +1,13 @@
-// src/services/TimerService.js - FIXED VERSION with proper export
+// src/services/TimerService.js - COMPLETE REPLACEMENT
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform, NativeModules } from 'react-native';
+import NotificationService from './NotificationService';
+
+const { BrainBitesTimer } = NativeModules;
 
 class TimerService {
   constructor() {
     this.availableTime = 0; // in seconds
-    this.activeApp = null;
     this.isAppRunning = false;
     this.timer = null;
     this.startTime = null;
@@ -16,29 +18,161 @@ class TimerService {
     this.pausedTime = 0;
     this.pauseStartTime = null;
     this.appStateSubscription = null;
+    this.isBackgroundTracking = false;
+    this.backgroundStartTime = null;
     
-    // Load saved data on initialization
+    // Initialize
     this.loadSavedTime();
-    
-    // Listen for app state changes
+    this.setupAppStateListener();
+    this.setupNativeTimer();
+  }
+  
+  setupNativeTimer() {
+    if (Platform.OS === 'android' && BrainBitesTimer) {
+      console.log('Using native Android timer service');
+      this.useNativeTimer = true;
+    } else {
+      console.log('Using JavaScript timer service');
+      this.useNativeTimer = false;
+    }
+  }
+  
+  setupAppStateListener() {
     this.appStateSubscription = AppState.addEventListener('change', this._handleAppStateChange);
   }
   
-  // Handle app going to background/foreground
   _handleAppStateChange = (nextAppState) => {
-    // If session is running and app goes to background
+    console.log(`App state changed: ${this.appState} -> ${nextAppState}`);
+    
     if (this.appState === 'active' && nextAppState.match(/inactive|background/)) {
-      this._pauseSession();
-    } 
-    // If session is paused and app comes to foreground
-    else if (this.appState.match(/inactive|background/) && nextAppState === 'active') {
-      this._resumeSession();
+      // App going to background - start time tracking
+      this._startBackgroundTracking();
+    } else if (this.appState.match(/inactive|background/) && nextAppState === 'active') {
+      // App coming to foreground - stop time tracking
+      this._stopBackgroundTracking();
     }
     
     this.appState = nextAppState;
   }
   
-  // Load previously saved time from storage
+  _startBackgroundTracking() {
+    if (this.availableTime <= 0 || this.isBackgroundTracking) {
+      return;
+    }
+    
+    console.log('Starting background time tracking');
+    this.isBackgroundTracking = true;
+    this.backgroundStartTime = Date.now();
+    
+    if (this.useNativeTimer && BrainBitesTimer) {
+      // Use native Android service
+      BrainBitesTimer.setScreenTime(this.availableTime);
+      BrainBitesTimer.startTracking();
+    } else {
+      // Use JavaScript timer
+      this._startJSTimer();
+    }
+    
+    // Schedule notifications
+    this._scheduleNotifications();
+    
+    this._notifyListeners('trackingStarted', { availableTime: this.availableTime });
+  }
+  
+  _stopBackgroundTracking() {
+    if (!this.isBackgroundTracking) {
+      return;
+    }
+    
+    console.log('Stopping background time tracking');
+    
+    if (this.useNativeTimer && BrainBitesTimer) {
+      // Get updated time from native service
+      BrainBitesTimer.getRemainingTime().then(time => {
+        this.availableTime = time;
+        this.saveTimeData();
+        this._notifyListeners('timeUpdate', { remaining: this.availableTime });
+      });
+      BrainBitesTimer.stopTracking();
+    } else {
+      // Calculate time spent in background
+      if (this.backgroundStartTime) {
+        const timeSpent = Math.floor((Date.now() - this.backgroundStartTime) / 1000);
+        this.availableTime = Math.max(0, this.availableTime - timeSpent);
+        console.log(`Time spent in background: ${timeSpent}s, remaining: ${this.availableTime}s`);
+      }
+      this._stopJSTimer();
+    }
+    
+    this.isBackgroundTracking = false;
+    this.backgroundStartTime = null;
+    
+    // Cancel notifications
+    try {
+      NotificationService.cancelTimeNotifications();
+    } catch (error) {
+      console.log('Notification error (simulator):', error.message);
+    }
+    
+    this.saveTimeData();
+    this._notifyListeners('trackingStopped', { availableTime: this.availableTime });
+  }
+  
+  _startJSTimer() {
+    if (this.timer) {
+      clearInterval(this.timer);
+    }
+    
+    this.timer = setInterval(() => {
+      if (this.availableTime > 0) {
+        this.availableTime--;
+        this._notifyListeners('timeUpdate', { remaining: this.availableTime });
+        
+        if (this.availableTime <= 0) {
+          this._handleTimeExpired();
+        }
+        
+        // Save every 30 seconds
+        if (this.availableTime % 30 === 0) {
+          this.saveTimeData();
+        }
+      }
+    }, 1000);
+  }
+  
+  _stopJSTimer() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+  
+  _scheduleNotifications() {
+    try {
+      if (this.availableTime > 300) { // 5 minutes
+        NotificationService.scheduleLowTimeNotification(5, this.availableTime - 300);
+      }
+      if (this.availableTime > 60) { // 1 minute
+        NotificationService.scheduleLowTimeNotification(1, this.availableTime - 60);
+      }
+    } catch (error) {
+      console.log('Notification scheduling error:', error.message);
+    }
+  }
+  
+  _handleTimeExpired() {
+    console.log('Time has expired!');
+    this._stopBackgroundTracking();
+    
+    try {
+      NotificationService.showTimeExpiredNotification();
+    } catch (error) {
+      console.log('Notification error:', error.message);
+    }
+    
+    this._notifyListeners('timeExpired', {});
+  }
+  
   async loadSavedTime() {
     try {
       const data = await AsyncStorage.getItem(this.STORAGE_KEY);
@@ -46,203 +180,57 @@ class TimerService {
         const parsedData = JSON.parse(data);
         this.availableTime = parsedData.availableTime || 0;
         
-        // If there was an active session that wasn't properly ended
-        if (parsedData.sessionStartTime && !parsedData.sessionEnded) {
-          const elapsedTime = Math.floor((Date.now() - parsedData.sessionStartTime) / 1000);
-          const adjustedTime = Math.max(0, this.availableTime - elapsedTime);
-          
-          // If more than 5 minutes elapsed, assume app was closed and deduct time
-          if (elapsedTime > 300) {
-            this.availableTime = adjustedTime;
-            this.saveTimeData();
-          }
+        // Handle case where app was closed during background tracking
+        if (parsedData.wasBackgroundTracking && parsedData.backgroundStartTime) {
+          const timeSpentClosed = Math.floor((Date.now() - parsedData.backgroundStartTime) / 1000);
+          this.availableTime = Math.max(0, this.availableTime - timeSpentClosed);
+          console.log(`Adjusted time for ${timeSpentClosed}s spent while app was closed`);
         }
       }
+      
+      console.log('Loaded saved time:', this.availableTime);
       this._notifyListeners('timeLoaded', { availableTime: this.availableTime });
+      return this.availableTime;
     } catch (error) {
       console.error('Error loading saved time:', error);
+      return 0;
     }
   }
   
-  // Save current time state to storage
   async saveTimeData() {
     try {
       const data = {
         availableTime: this.availableTime,
         lastUpdated: new Date().toISOString(),
-        sessionStartTime: this.sessionStartTime,
-        sessionEnded: !this.isAppRunning,
-        activeApp: this.activeApp
+        wasBackgroundTracking: this.isBackgroundTracking,
+        backgroundStartTime: this.backgroundStartTime,
+        appState: this.appState
       };
+      
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
       console.error('Error saving time data:', error);
     }
   }
   
-  // Pause the session when app goes to background
-  _pauseSession() {
-    if (!this.isAppRunning) return;
-    
-    this.pauseStartTime = Date.now();
-    
-    // Clear the timer but don't end session
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-    
-    this._notifyListeners('sessionPaused', { 
-      app: this.activeApp,
-      elapsedBeforePause: Math.floor((Date.now() - this.sessionStartTime) / 1000) - this.pausedTime
-    });
-  }
-  
-  // Resume the session when app comes to foreground
-  _resumeSession() {
-    if (!this.isAppRunning || !this.pauseStartTime) return;
-    
-    // Calculate paused duration and add to total paused time
-    if (this.pauseStartTime) {
-      this.pausedTime += Math.floor((Date.now() - this.pauseStartTime) / 1000);
-      this.pauseStartTime = null;
-    }
-    
-    // Restart the timer
-    this.timer = setInterval(() => {
-      this._updateRemainingTime();
-    }, 1000);
-    
-    this._notifyListeners('sessionResumed', { app: this.activeApp });
-  }
-  
-  // Start the timer for an app
-  startAppTimer(appId) {
-    if (this.availableTime <= 0) {
-      this._notifyListeners('timeExpired');
-      return false;
-    }
-    
-    this.activeApp = appId;
-    this.isAppRunning = true;
-    this.sessionStartTime = Date.now();
-    this.pausedTime = 0;
-    this.pauseStartTime = null;
-    
-    // Clear any existing timer
-    if (this.timer) {
-      clearInterval(this.timer);
-    }
-    
-    // Start tracking time
-    this.timer = setInterval(() => {
-      this._updateRemainingTime();
-    }, 1000);
-    
-    this._notifyListeners('sessionStarted', { 
-      appId,
-      availableTime: this.availableTime 
-    });
-    
-    this.saveTimeData();
-    return true;
-  }
-  
-  // Stop the timer
-  stopAppTimer() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-    
-    // Calculate time spent in this session
-    let timeSpent = 0;
-    if (this.sessionStartTime) {
-      timeSpent = Math.floor((Date.now() - this.sessionStartTime) / 1000) - this.pausedTime;
-      this.availableTime = Math.max(0, this.availableTime - timeSpent);
-    }
-    
-    this.isAppRunning = false;
-    this.sessionStartTime = null;
-    this.pausedTime = 0;
-    this.pauseStartTime = null;
-    
-    this._notifyListeners('sessionEnded', { 
-      appId: this.activeApp,
-      timeSpent,
-      remainingTime: this.availableTime
-    });
-    
-    this.activeApp = null;
-    this.saveTimeData();
-    return timeSpent;
-  }
-  
-  // Get current session info
-  getCurrentSession() {
-    if (!this.isAppRunning) return null;
-    
-    const rawElapsed = this.sessionStartTime ? 
-      Math.floor((Date.now() - this.sessionStartTime) / 1000) : 0;
-    
-    const elapsedTime = Math.max(0, rawElapsed - this.pausedTime);
-    const remainingTime = Math.max(0, this.availableTime - elapsedTime);
-    
-    return {
-      appId: this.activeApp,
-      elapsedTime,
-      remainingTime,
-      startTime: this.sessionStartTime,
-      isActive: this.appState === 'active' && !this.pauseStartTime
-    };
-  }
-  
-  // Update remaining time
-  _updateRemainingTime() {
-    if (!this.sessionStartTime || this.pauseStartTime) return;
-    
-    const rawElapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-    const elapsedTime = Math.max(0, rawElapsed - this.pausedTime);
-    const remainingTime = Math.max(0, this.availableTime - elapsedTime);
-    
-    // Notify listeners of time update
-    this._notifyListeners('timeUpdate', { 
-      remaining: remainingTime,
-      elapsed: elapsedTime,
-      total: this.availableTime
-    });
-    
-    // Check if time expired
-    if (remainingTime <= 0) {
-      this.stopAppTimer();
-      this._notifyListeners('timeExpired');
-    }
-    
-    // Save time periodically (every 30 seconds) to avoid too many writes
-    if (elapsedTime % 30 === 0) {
-      this.saveTimeData();
-    }
-  }
-  
-  // Add time credits (rewards for correct answers)
   addTimeCredits(seconds) {
+    console.log(`Adding ${seconds} seconds of screen time`);
     this.availableTime += seconds;
+    
+    // Update native service if using it
+    if (this.useNativeTimer && BrainBitesTimer && this.isBackgroundTracking) {
+      BrainBitesTimer.addTime(seconds);
+    }
+    
     this.saveTimeData();
     this._notifyListeners('creditsAdded', { seconds, newTotal: this.availableTime });
     return this.availableTime;
   }
   
-  // Get current available time
   getAvailableTime() {
-    // If there's an active session, calculate real-time remaining
-    if (this.isAppRunning && this.sessionStartTime) {
-      const session = this.getCurrentSession();
-      return session.remainingTime;
-    }
     return this.availableTime;
   }
   
-  // Format seconds to MM:SS or HH:MM:SS if > 60 minutes
   formatTime(seconds) {
     if (seconds < 0) seconds = 0;
     
@@ -257,7 +245,6 @@ class TimerService {
     }
   }
   
-  // Add event listener
   addEventListener(callback) {
     this.listeners.push(callback);
     return () => {
@@ -265,31 +252,32 @@ class TimerService {
     };
   }
   
-  // Notify all listeners
   _notifyListeners(event, data = {}) {
     this.listeners.forEach(listener => {
       listener({ event, ...data });
     });
   }
   
-  // Clean up
   cleanup() {
-    if (this.timer) {
-      clearInterval(this.timer);
-    }
+    console.log('Cleaning up Timer Service');
     
-    // Remove the AppState event listener
+    this._stopBackgroundTracking();
+    
     if (this.appStateSubscription) {
       this.appStateSubscription.remove();
       this.appStateSubscription = null;
     }
     
-    // If session is active, save the state before cleanup
-    if (this.isAppRunning) {
-      this.stopAppTimer();
+    if (this.useNativeTimer && BrainBitesTimer) {
+      BrainBitesTimer.stopTracking();
+    }
+    
+    try {
+      NotificationService.cancelAllNotifications();
+    } catch (error) {
+      console.log('Notification cleanup error:', error.message);
     }
   }
 }
 
-// ✅ FIXED: Export singleton instance (not the class)
 export default new TimerService();
