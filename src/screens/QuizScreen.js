@@ -19,6 +19,9 @@ import TimerService from '../services/TimerService';
 import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
+import { Platform } from 'react-native';
+import EnhancedTimerService from './EnhancedTimerService';
+import NativeTimerService from './NativeTimerService';
 
 const QuizScreen = ({ navigation, route }) => {
   const [currentQuestion, setCurrentQuestion] = useState(null);

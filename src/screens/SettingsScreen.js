@@ -20,6 +20,9 @@ import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import NotificationService from '../services/NotificationService';
+import { Platform } from 'react-native';
+import EnhancedTimerService from './EnhancedTimerService';
+import NativeTimerService from './NativeTimerService';
 
 const SettingsScreen = ({ navigation }) => {
   const [normalReward, setNormalReward] = useState(30); // Seconds for correct answer
