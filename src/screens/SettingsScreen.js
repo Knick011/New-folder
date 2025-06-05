@@ -14,12 +14,10 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import TimerService from '../services/TimerService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
-import EnhancedTimerService from '../services/EnhancedTimerService';
-import NativeTimerService from '../services/NativeTimerService';
 import NotificationService from '../services/NotificationService';
 
 const SettingsScreen = ({ navigation }) => {
@@ -167,7 +165,7 @@ const SettingsScreen = ({ navigation }) => {
     SoundService.playButtonPress();
     
     // Add 5 minutes (300 seconds) for testing
-    TimerService.addTimeCredits(300);
+    EnhancedTimerService.addTimeCredits(300);
     Alert.alert('Added 5 minutes of test time');
   };
   

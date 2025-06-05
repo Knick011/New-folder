@@ -15,12 +15,10 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import QuizService from '../services/QuizService';
-import TimerService from '../services/TimerService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
 import SoundService from '../services/SoundService';
 import ScoreService from '../services/ScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
-import EnhancedTimerService from '../services/EnhancedTimerService';
-import NativeTimerService from '../services/NativeTimerService';
 
 const QuizScreen = ({ navigation, route }) => {
   const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -211,7 +209,7 @@ const QuizScreen = ({ navigation, route }) => {
   };
 
   const handleAnswerSelect = (option) => {
-    if (selectedAnswer !== null) return; // Prevent multiple selections
+    if (selectedAnswer !== null) return;
     
     // Stop timer animation and clear timeout immediately
     if (timerAnimation.current) {
@@ -248,7 +246,7 @@ const QuizScreen = ({ navigation, route }) => {
           useNativeDriver: true,
           easing: Easing.out(Easing.back(1.5)),
         }),
-        Animated.delay(1500), // Longer delay to see the points
+        Animated.delay(1500),
         Animated.timing(pointsAnim, {
           toValue: 0,
           duration: 300,
@@ -256,7 +254,6 @@ const QuizScreen = ({ navigation, route }) => {
           easing: Easing.in(Easing.cubic),
         }),
       ]).start(() => {
-        // Fix useInsertionEffect error
         setTimeout(() => {
           setShowPointsAnimation(false);
         }, 0);
@@ -278,33 +275,33 @@ const QuizScreen = ({ navigation, route }) => {
         }),
       ]).start();
       
-      // Handle milestone FIRST before regular rewards
+      // Handle milestone
       if (scoreResult.isStreakMilestone) {
         console.log('🎉 STREAK MILESTONE REACHED:', scoreResult.currentStreak);
         
         // Add milestone bonus time - 2 minutes (120 seconds)
-        TimerService.addTimeCredits(120);
+        EnhancedTimerService.addTimeCredits(120);
         
         // Play streak sound
         SoundService.playStreak();
         
-        // Show streak celebration mascot (IMPORTANT: Before explanation)
+        // Show streak celebration mascot
         setTimeout(() => {
           showMascotForStreak(scoreResult.currentStreak);
-        }, 800); // Show after points animation starts
+        }, 800);
         
-        // Show explanation much later
+        // Show explanation
         setTimeout(() => {
           setShowExplanation(true);
           showExplanationWithAnimation();
-        }, 3000); // 3 seconds to see streak celebration
+        }, 3000);
         
       } else {
         // Regular correct answer
-        TimerService.addTimeCredits(30);
+        EnhancedTimerService.addTimeCredits(30);
         SoundService.playCorrect();
         
-        // Show explanation sooner for regular answers
+        // Show explanation
         setTimeout(() => {
           setShowExplanation(true);
           showExplanationWithAnimation();
@@ -320,7 +317,7 @@ const QuizScreen = ({ navigation, route }) => {
         showMascotForWrongAnswer();
       }, 500);
       
-      // Show explanation after mascot
+      // Show explanation
       setTimeout(() => {
         setShowExplanation(true);
         showExplanationWithAnimation();
@@ -330,17 +327,11 @@ const QuizScreen = ({ navigation, route }) => {
   
   const showExplanationWithAnimation = () => {
     Animated.timing(explanationAnim, {
-      toValue: 0,
+      toValue: 1,
       duration: 300,
       useNativeDriver: true,
-      easing: Easing.in(Easing.cubic),
-    }).start(() => {
-      // Defer state updates
-      setTimeout(() => {
-        setShowExplanation(false);
-        loadQuestion();
-      }, 0);
-    });
+      easing: Easing.out(Easing.cubic),
+    }).start();
   };
   
   const showMascotForStreak = (streakCount) => {

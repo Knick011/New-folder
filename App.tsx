@@ -1,4 +1,4 @@
-// App.tsx (Updated without TimeIndicator)
+// App.tsx - Simplified version
 import React, { useEffect, useState } from 'react';
 import { StatusBar, View, Text, ActivityIndicator, StyleSheet, LogBox, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,14 +6,15 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Import updated screens
+// Import screens
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AudioTimerTestScreen from './src/screens/AudioTimerTestScreen';
 
-// Import services
-import TimerService from './src/services/TimerService';
+// Import services - only use EnhancedTimerService
+import EnhancedTimerService from './src/services/EnhancedTimerService';
 import SoundService from './src/services/SoundService';
 import QuizService from './src/services/QuizService';
 import ScoreService from './src/services/ScoreService';
@@ -25,29 +26,12 @@ LogBox.ignoreLogs([
   'ColorPropType will be removed',
 ]);
 
-type RootStackParamList = {
-  Welcome: undefined;
-  Home: undefined;
-  Quiz: { category?: string };
-  Settings: undefined;
-};
-
-interface TimerEvent {
-  event: string;
-  remaining?: number;
-  seconds?: number;
-  isTracking?: boolean;
-  isAppForeground?: boolean;
-}
-
-const Stack = createStackNavigator<RootStackParamList>();
+const Stack = createStackNavigator();
 
 const App = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   
-  // Setup and initialize services
   useEffect(() => {
     const initializeServices = async () => {
       try {
@@ -57,82 +41,26 @@ const App = () => {
         const hasLaunchedBefore = await AsyncStorage.getItem('brainbites_onboarding_complete');
         setIsFirstLaunch(hasLaunchedBefore !== 'true');
         
-        // Initialize sound service
-        try {
-          console.log("✓ Sound service ready");
-        } catch (err: unknown) {
-          console.warn("Sound initialization error:", err);
-        }
-        
-        // Initialize quiz service
+        // Initialize services in order
         await QuizService.initialize();
         console.log("✓ Quiz service initialized");
         
-        // Initialize score service
         await ScoreService.loadSavedData();
         console.log("✓ Score service initialized");
         
-        // Set up notification permissions (with error handling for AVD)
-        if (Platform.OS === 'ios') {
-          try {
-            const PushNotificationIOS = require('@react-native-community/push-notification-ios');
-            const permissions = await PushNotificationIOS.requestPermissions();
-            console.log('✓ iOS notification permissions:', permissions);
-          } catch (error: unknown) {
-            console.log('iOS notification permission error (likely AVD):', (error as Error).message);
-          }
-        }
-        
-        // Initialize timer service
-        await TimerService.loadSavedTime();
+        // Initialize timer service (handles native timer if available)
+        await EnhancedTimerService.loadSavedTime();
         console.log("✓ Timer service initialized");
         
-        // Add timer event listener for debugging
-        TimerService.addEventListener((event: any) => {
-          console.log('Timer Event:', event);
-          
-          // Update debug info
-          setDebugInfo({
-            availableTime: TimerService.getAvailableTime(),
-            formattedTime: TimerService.formatTime(TimerService.getAvailableTime()),
-            isRunning: event.event === 'trackingStarted',
-            isBrainBitesActive: event.event !== 'trackingStarted',
-            appState: 'monitoring'
-          });
-          
-          // Log important events
-          if (event.event === 'timeUpdate') {
-            console.log('⏱️ Timer update:', event.remaining, 'seconds remaining');
-          } else if (event.event === 'timeExpired') {
-            console.log('⏰ Screen time expired!');
-          } else if (event.event === 'creditsAdded') {
-            console.log(`💰 Added ${event.seconds} seconds of screen time`);
-          } else if (event.event === 'trackingStarted') {
-            console.log('📱 Background time tracking started');
-          } else if (event.event === 'trackingStopped') {
-            console.log('📱 Background time tracking stopped');
-          }
-        });
-        
-        // Get initial debug info
-        setDebugInfo({
-          availableTime: TimerService.getAvailableTime(),
-          formattedTime: TimerService.formatTime(TimerService.getAvailableTime()),
-          isRunning: false,
-          isBrainBitesActive: true,
-          appState: 'active'
-        });
-        
-        // Schedule initial reminders (with error handling for AVD)
+        // Schedule notifications
         try {
-          const availableTime = TimerService.getAvailableTime();
+          const availableTime = EnhancedTimerService.getAvailableTime();
           if (availableTime <= 300) {
             NotificationService.scheduleEarnTimeReminder(4);
           }
           NotificationService.scheduleStreakReminder();
-          console.log("✓ Notifications scheduled");
-        } catch (error: unknown) {
-          console.log('Notification scheduling skipped (likely AVD):', (error as Error).message);
+        } catch (error) {
+          console.log('Notification scheduling skipped:', error.message);
         }
         
         setTimeout(() => {
@@ -140,7 +68,7 @@ const App = () => {
           console.log("🚀 BrainBites initialization complete!");
         }, 1000);
         
-      } catch (error: unknown) {
+      } catch (error) {
         console.error("❌ Error initializing services:", error);
         setIsInitializing(false);
       }
@@ -149,35 +77,20 @@ const App = () => {
     initializeServices();
     
     return () => {
-      TimerService.cleanup();
+      EnhancedTimerService.cleanup();
       try {
         SoundService.cleanup();
-      } catch (error: unknown) {
-        console.log('Sound cleanup error (expected):', (error as Error).message);
-      }
-      try {
-        NotificationService.cancelAllNotifications();
-      } catch (error: unknown) {
-        console.log('Notification cleanup error (likely AVD):', (error as Error).message);
+      } catch (error) {
+        console.log('Sound cleanup error:', error.message);
       }
     };
   }, []);
 
-  // Show loading screen
   if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FF9F1C" />
         <Text style={styles.loadingText}>Loading Brain Bites...</Text>
-        {debugInfo && __DEV__ && (
-          <View style={styles.debugContainer}>
-            <Text style={styles.debugText}>
-              Time: {debugInfo.formattedTime} | 
-              Tracking: {debugInfo.isRunning ? 'ON' : 'OFF'} | 
-              App: {debugInfo.isBrainBitesActive ? 'ACTIVE' : 'BACKGROUND'}
-            </Text>
-          </View>
-        )}
       </View>
     );
   }
@@ -190,38 +103,17 @@ const App = () => {
           initialRouteName={isFirstLaunch ? "Welcome" : "Home"}
           screenOptions={{
             headerShown: false,
-            cardStyle: { backgroundColor: '#FFF8E7' },
-            cardStyleInterpolator: ({ current, layouts }) => {
-              return {
-                cardStyle: {
-                  transform: [
-                    {
-                      translateY: current.progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [layouts.screen.height, 0],
-                      }),
-                    },
-                  ],
-                  opacity: current.progress,
-                },
-              };
-            },
+            cardStyle: { backgroundColor: '#FFF8E7' }
           }}
         >
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          {__DEV__ && (
+            <Stack.Screen name="AudioTimerTest" component={AudioTimerTestScreen} />
+          )}
         </Stack.Navigator>
-        
-        {/* Debug overlay for development */}
-        {__DEV__ && debugInfo && (
-          <View style={styles.debugOverlay}>
-            <Text style={styles.debugOverlayText}>
-              {debugInfo.formattedTime} | {debugInfo.isRunning ? '🟢' : '🔴'} | {debugInfo.isBrainBitesActive ? 'APP' : 'BG'}
-            </Text>
-          </View>
-        )}
       </NavigationContainer>
     </SafeAreaProvider>
   );
@@ -240,33 +132,6 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
-  },
-  debugContainer: {
-    marginTop: 20,
-    padding: 10,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 5,
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  debugOverlay: {
-    position: 'absolute',
-    top: 50,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 8,
-    borderRadius: 5,
-    zIndex: 9999,
-  },
-  debugOverlayText: {
-    color: 'white',
-    fontSize: 12,
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 

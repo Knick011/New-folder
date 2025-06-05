@@ -146,4 +146,19 @@ class BrainBitesTimerModule(reactContext: ReactApplicationContext) : ReactContex
     fun removeListeners(count: Int) {
         // Required for RN event emitter
     }
+
+    @ReactMethod
+    fun notifyAppState(state: String) {
+        Log.d(TAG, "App state notification: $state")
+        
+        val intent = Intent(reactApplicationContext, BrainBitesTimerService::class.java).apply {
+            action = when(state) {
+                "app_foreground" -> BrainBitesTimerService.ACTION_APP_FOREGROUND
+                "app_background" -> BrainBitesTimerService.ACTION_APP_BACKGROUND
+                else -> return
+            }
+        }
+        
+        reactApplicationContext.startService(intent)
+    }
 }

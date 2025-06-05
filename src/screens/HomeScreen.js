@@ -13,16 +13,13 @@ import {
   Platform
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import TimerService from '../services/TimerService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../styles/theme';
 import commonStyles from '../styles/commonStyles';
-import TimeSpeechBubble from '../components/common/TimeSpeechBubble';
-import EnhancedTimerService from '../services/EnhancedTimerService';
-import NativeTimerService from '../services/NativeTimerService';
 
 const { width } = Dimensions.get('window');
 
@@ -33,7 +30,6 @@ const HomeScreen = ({ navigation }) => {
   const [mascotType, setMascotType] = useState('happy');
   const [mascotMessage, setMascotMessage] = useState(null);
   const [mascotEnabled, setMascotEnabled] = useState(true);
-  const [showTimeBubble, setShowTimeBubble] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -52,7 +48,7 @@ const HomeScreen = ({ navigation }) => {
     loadAvailableTime();
     
     // Add timer event listener
-    const removeListener = TimerService.addEventListener(handleTimerEvent);
+    const removeListener = EnhancedTimerService.addEventListener(handleTimerEvent);
     
     // Load categories
     loadCategories();
@@ -157,7 +153,7 @@ const HomeScreen = ({ navigation }) => {
   }, [categories]);
   
   const loadAvailableTime = async () => {
-    const timeInSeconds = TimerService.getAvailableTime();
+    const timeInSeconds = EnhancedTimerService.getAvailableTime();
     setAvailableTime(timeInSeconds);
   };
   
@@ -193,7 +189,7 @@ const HomeScreen = ({ navigation }) => {
       setShowMascot(true);
     } else if (availableTime < 300) { // Less than 5 minutes
       setMascotType('happy');
-      setMascotMessage(`Welcome back! 🌟\n\nYou have ${TimerService.formatTime(availableTime)} of app time remaining.\n\nAnswer more questions to earn extra time! 🧠⏰`);
+      setMascotMessage(`Welcome back! 🌟\n\nYou have ${EnhancedTimerService.formatTime(availableTime)} of app time remaining.\n\nAnswer more questions to earn extra time! 🧠⏰`);
       setShowMascot(true);
     }
     // Don't show mascot if user has plenty of time
@@ -201,7 +197,7 @@ const HomeScreen = ({ navigation }) => {
   
   const handleTimerEvent = (event) => {
     if (event.event === 'creditsAdded' || event.event === 'timeUpdate') {
-      setAvailableTime(TimerService.getAvailableTime());
+      setAvailableTime(EnhancedTimerService.getAvailableTime());
     }
   };
   
@@ -236,15 +232,42 @@ const HomeScreen = ({ navigation }) => {
   // HOME SCREEN SPECIFIC: Handle peeking mascot press to show time information
   const handlePeekingMascotPress = () => {
     if (!mascotEnabled) return;
-    setShowTimeBubble(true);
+    
+    const time = EnhancedTimerService.getAvailableTime();
+    let message = '';
+    let type = 'happy';
+    
+    if (time <= 0) {
+      message = "You have no app time remaining! 😔\n\nComplete quizzes to earn time:\n• Each correct answer = 30 seconds\n• Streak milestones = 2 minutes bonus!\n\nLet's start learning! 🧠";
+      type = 'depressed';
+    } else {
+      const hours = Math.floor(time / 3600);
+      const minutes = Math.floor((time % 3600) / 60);
+      const seconds = time % 60;
+      
+      let timeBreakdown = '';
+      if (hours > 0) {
+        timeBreakdown = `${hours} hour${hours > 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+      } else if (minutes > 0) {
+        timeBreakdown = `${minutes} minute${minutes !== 1 ? 's' : ''}, ${seconds} second${seconds !== 1 ? 's' : ''}`;
+      } else {
+        timeBreakdown = `${seconds} second${seconds !== 1 ? 's' : ''}`;
+      }
+      
+      message = `You have ${timeBreakdown} of app time! ⏰\n\nUse it wisely on your favorite apps.\nWhen it runs out, come back to earn more! 🧠\n\nKeep learning to unlock more time! 📚`;
+    }
+    
+    setMascotType(type);
+    setMascotMessage(message);
+    setShowMascot(true);
   };
   
   const handleTimeCardPress = () => {
-    setShowTimeBubble(true);
-  };
-  
-  const handleTimeBubbleDismiss = () => {
-    setShowTimeBubble(false);
+    // Play button press sound
+    SoundService.playButtonPress();
+    
+    // Show time info in mascot message
+    handlePeekingMascotPress();
   };
   
   const getCategoryIcon = (category) => {
@@ -291,7 +314,7 @@ const HomeScreen = ({ navigation }) => {
     return descriptions[category] || 'Answer to earn time';
   };
   
-  const formattedTime = TimerService.formatTime(availableTime);
+  const formattedTime = EnhancedTimerService.formatTime(availableTime);
   
   // Ensure we have valid animation values for categories
   const getAnimValue = (index) => {
@@ -492,11 +515,6 @@ const HomeScreen = ({ navigation }) => {
         onPeekingPress={handlePeekingMascotPress}
         isQuizScreen={false}
         mascotEnabled={mascotEnabled}
-      />
-      <TimeSpeechBubble
-        visible={showTimeBubble}
-        onDismiss={handleTimeBubbleDismiss}
-        position="left"
       />
     </SafeAreaView>
   );
