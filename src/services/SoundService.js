@@ -76,14 +76,16 @@ class SoundService {
             if (Platform.OS === 'android') {
               // For Android: files should be in android/app/src/main/res/raw/
               // Use null as basePath for raw resources
-              sound = new Sound(filename.replace('.mp3', ''), null, (error) => {
+              // Android requires lowercase filenames without extension
+              const androidFilename = key.toLowerCase();
+              sound = new Sound(androidFilename, null, (error) => {
                 if (error) {
-                  console.error(`Failed to load Android sound ${filename}:`, error);
+                  console.error(`Failed to load Android sound ${androidFilename}:`, error);
                   soundResolve(false);
                   return;
                 }
                 
-                console.log(`Successfully loaded Android sound: ${filename}`);
+                console.log(`Successfully loaded Android sound: ${androidFilename}`);
                 this.sounds[key] = sound;
                 
                 // Set volume for different types
@@ -206,7 +208,9 @@ class SoundService {
     
     let sound;
     if (Platform.OS === 'android') {
-      sound = new Sound(filename.replace('.mp3', ''), null, (error) => {
+      // Use lowercase key without extension for Android
+      const androidFilename = soundName.toLowerCase();
+      sound = new Sound(androidFilename, null, (error) => {
         if (!error) {
           this.sounds[soundName] = sound;
           console.log(`Successfully reloaded sound: ${soundName}`);

@@ -336,15 +336,15 @@ const HomeScreen = ({ navigation }) => {
   };
   
   const getCategoryIcon = (category) => {
-    // Map categories to icons
+    // Map categories to icons - using more common icons that are definitely available
     const iconMap = {
-      'funfacts': 'lightbulb-on-outline',
-      'psychology': 'brain',
-      'math': 'calculator-variant-outline',
-      'science': 'flask-outline',
-      'history': 'book-open-page-variant-outline',
-      'english': 'alphabetical-variant',
-      'general': 'text-box-outline'
+      'funfacts': 'lightbulb-outline',
+      'psychology': 'head-question-outline',
+      'math': 'calculator',
+      'science': 'flask',
+      'history': 'book-open-variant',
+      'english': 'alphabetical',
+      'general': 'help-circle-outline'
     };
     
     return iconMap[category] || 'help-circle-outline';
