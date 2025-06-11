@@ -1,4 +1,4 @@
-// src/screens/HomeScreen.js - Fixed version with time display only
+// src/screens/HomeScreen.js - Simplified with daily streak instead of real-time timer
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
+import ScoreService from '../services/ScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../styles/theme';
@@ -25,6 +26,9 @@ const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const [availableTime, setAvailableTime] = useState(0);
+  const [dailyStreak, setDailyStreak] = useState(0);
+  const [hasPlayedToday, setHasPlayedToday] = useState(false);
+  const [totalScore, setTotalScore] = useState(0);
   const [categories, setCategories] = useState(['funfacts', 'psychology']);
   const [showMascot, setShowMascot] = useState(false);
   const [mascotType, setMascotType] = useState('happy');
@@ -34,7 +38,7 @@ const HomeScreen = ({ navigation }) => {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const timeCardAnim = useRef(new Animated.Value(0)).current;
+  const streakCardAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   
   // Initialize with empty animation values array
@@ -44,11 +48,8 @@ const HomeScreen = ({ navigation }) => {
     // Play menu music when entering home screen
     SoundService.startMenuMusic();
     
-    // Load initial time
-    loadAvailableTime();
-    
-    // Add timer event listener
-    const removeListener = EnhancedTimerService.addEventListener(handleTimerEvent);
+    // Load initial data
+    loadInitialData();
     
     // Load categories
     loadCategories();
@@ -60,6 +61,102 @@ const HomeScreen = ({ navigation }) => {
     initializeCategoryAnimations(categories);
     
     // Start entrance animations
+    startEntranceAnimations();
+    
+    // Show welcome mascot after a delay
+    setTimeout(() => {
+      if (mascotEnabled) {
+        showInitialMascotMessage();
+      }
+    }, 2000);
+    
+    return () => {
+      // Cleanup
+    };
+  }, []);
+  
+  const loadInitialData = async () => {
+    try {
+      // Load available time (static, not real-time)
+      const time = EnhancedTimerService.getAvailableTime();
+      setAvailableTime(time);
+      
+      // Load daily streak data
+      const streakData = await AsyncStorage.getItem('brainbites_daily_streak');
+      if (streakData) {
+        const parsed = JSON.parse(streakData);
+        const today = new Date().toDateString();
+        const lastPlayed = parsed.lastPlayedDate;
+        
+        if (lastPlayed === today) {
+          setDailyStreak(parsed.streak);
+          setHasPlayedToday(true);
+        } else {
+          // Check if streak should continue or reset
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          if (lastPlayed === yesterday.toDateString()) {
+            // Continue streak
+            setDailyStreak(parsed.streak);
+          } else {
+            // Streak broken
+            setDailyStreak(0);
+          }
+          setHasPlayedToday(false);
+        }
+      }
+      
+      // Load total score
+      await ScoreService.loadSavedData();
+      const scoreInfo = ScoreService.getScoreInfo();
+      setTotalScore(scoreInfo.totalScore);
+      
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    }
+  };
+  
+  const updateDailyStreak = async () => {
+    const today = new Date().toDateString();
+    const streakData = {
+      streak: hasPlayedToday ? dailyStreak : dailyStreak + 1,
+      lastPlayedDate: today
+    };
+    
+    await AsyncStorage.setItem('brainbites_daily_streak', JSON.stringify(streakData));
+    
+    if (!hasPlayedToday) {
+      setDailyStreak(dailyStreak + 1);
+      setHasPlayedToday(true);
+      
+      // Show streak celebration
+      if (mascotEnabled) {
+        showStreakCelebration(dailyStreak + 1);
+      }
+    }
+  };
+  
+  const showStreakCelebration = (streak) => {
+    let message = '';
+    let type = 'excited';
+    
+    if (streak === 1) {
+      message = "🎉 Great start! You've begun your daily streak!\n\nKeep coming back every day to maintain it!";
+    } else if (streak % 7 === 0) {
+      message = `🔥 AMAZING! ${streak} day streak!\n\nThat's ${streak / 7} full week${streak > 7 ? 's' : ''}! You're unstoppable!`;
+    } else if (streak % 30 === 0) {
+      message = `🏆 LEGENDARY! ${streak} day streak!\n\nA full month of learning! You're a true Brain Bites champion!`;
+    } else {
+      message = `🔥 ${streak} day streak! Keep it up!\n\nYour dedication to learning is inspiring!`;
+    }
+    
+    setMascotType(type);
+    setMascotMessage(message);
+    setShowMascot(true);
+  };
+  
+  const startEntranceAnimations = () => {
     Animated.parallel([
       // Fade in everything
       Animated.timing(fadeAnim, {
@@ -77,10 +174,10 @@ const HomeScreen = ({ navigation }) => {
         easing: Easing.out(Easing.back(1.5)),
       }),
       
-      // Time card animation
+      // Streak card animation
       Animated.sequence([
         Animated.delay(250),
-        Animated.spring(timeCardAnim, {
+        Animated.spring(streakCardAnim, {
           toValue: 1,
           friction: 7,
           tension: 40,
@@ -88,36 +185,25 @@ const HomeScreen = ({ navigation }) => {
         }),
       ]),
       
-      // Bounce animation for time icon
+      // Bounce animation for streak icon
       Animated.loop(
         Animated.sequence([
           Animated.timing(bounceAnim, {
             toValue: 1,
-            duration: 1000,
+            duration: 2000,
             useNativeDriver: true,
-            easing: Easing.inOut(Easing.ease),
+            easing: Easing.inOut(Easing.sin),
           }),
           Animated.timing(bounceAnim, {
             toValue: 0,
-            duration: 1000,
+            duration: 2000,
             useNativeDriver: true,
-            easing: Easing.inOut(Easing.ease),
+            easing: Easing.inOut(Easing.sin),
           }),
         ])
       ),
     ]).start();
-    
-    // Show welcome mascot with time info after a delay (only if enabled and low/no time)
-    setTimeout(() => {
-      if (mascotEnabled) {
-        showInitialMascotMessage();
-      }
-    }, 2000);
-    
-    return () => {
-      removeListener();
-    };
-  }, []);
+  };
   
   // Initialize animation values for categories
   const initializeCategoryAnimations = (categoriesList) => {
@@ -152,11 +238,6 @@ const HomeScreen = ({ navigation }) => {
     initializeCategoryAnimations(categories);
   }, [categories]);
   
-  const loadAvailableTime = async () => {
-    const timeInSeconds = EnhancedTimerService.getAvailableTime();
-    setAvailableTime(timeInSeconds);
-  };
-  
   const loadCategories = async () => {
     try {
       const cats = await QuizService.getCategories();
@@ -179,31 +260,25 @@ const HomeScreen = ({ navigation }) => {
     }
   };
   
-  // Show initial mascot message based on available time
+  // Show initial mascot message
   const showInitialMascotMessage = () => {
     if (!mascotEnabled) return;
     
-    if (availableTime <= 0) {
-      setMascotType('depressed');
-      setMascotMessage("Welcome to Brain Bites! 🧠\n\nYou're out of app time! 😢\nAnswer some questions to earn more time and unlock your favorite apps!\n\nLet's start learning! 📚");
-      setShowMascot(true);
-    } else if (availableTime < 300) { // Less than 5 minutes
+    if (!hasPlayedToday) {
       setMascotType('happy');
-      setMascotMessage(`Welcome back! 🌟\n\nYou have ${EnhancedTimerService.formatTime(availableTime)} of app time remaining.\n\nAnswer more questions to earn extra time! 🧠⏰`);
+      setMascotMessage(`Welcome back! 🌟\n\nReady to continue your learning journey?\nPlay a quiz to maintain your ${dailyStreak > 0 ? dailyStreak + ' day' : ''} streak!`);
       setShowMascot(true);
     }
-    // Don't show mascot if user has plenty of time
   };
   
-  const handleTimerEvent = (event) => {
-    if (event.event === 'creditsAdded' || event.event === 'timeUpdate') {
-      setAvailableTime(EnhancedTimerService.getAvailableTime());
-    }
-  };
-  
-  const handleStartQuiz = (category) => {
+  const handleStartQuiz = async (category) => {
     // Play button press sound
     SoundService.playButtonPress();
+    
+    // Update daily streak if first play today
+    if (!hasPlayedToday) {
+      await updateDailyStreak();
+    }
     
     // Hide mascot
     setShowMascot(false);
@@ -229,44 +304,34 @@ const HomeScreen = ({ navigation }) => {
     setShowMascot(false);
   };
   
-  // HOME SCREEN SPECIFIC: Handle peeking mascot press to show time information
+  // Handle peeking mascot press to show stats
   const handlePeekingMascotPress = () => {
     if (!mascotEnabled) return;
     
     const time = EnhancedTimerService.getAvailableTime();
-    let message = '';
-    let type = 'happy';
+    const formattedTime = EnhancedTimerService.formatTime(time);
     
-    if (time <= 0) {
-      message = "You have no app time remaining! 😔\n\nComplete quizzes to earn time:\n• Each correct answer = 30 seconds\n• Streak milestones = 2 minutes bonus!\n\nLet's start learning! 🧠";
-      type = 'depressed';
+    let message = `📊 Your Stats:\n\n`;
+    message += `🔥 Daily Streak: ${dailyStreak} day${dailyStreak !== 1 ? 's' : ''}\n`;
+    message += `⭐ Total Score: ${totalScore.toLocaleString()}\n`;
+    message += `⏱️ App Time: ${formattedTime}\n\n`;
+    
+    if (!hasPlayedToday) {
+      message += `Play a quiz today to continue your streak! 💪`;
     } else {
-      const hours = Math.floor(time / 3600);
-      const minutes = Math.floor((time % 3600) / 60);
-      const seconds = time % 60;
-      
-      let timeBreakdown = '';
-      if (hours > 0) {
-        timeBreakdown = `${hours} hour${hours > 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      } else if (minutes > 0) {
-        timeBreakdown = `${minutes} minute${minutes !== 1 ? 's' : ''}, ${seconds} second${seconds !== 1 ? 's' : ''}`;
-      } else {
-        timeBreakdown = `${seconds} second${seconds !== 1 ? 's' : ''}`;
-      }
-      
-      message = `You have ${timeBreakdown} of app time! ⏰\n\nUse it wisely on your favorite apps.\nWhen it runs out, come back to earn more! 🧠\n\nKeep learning to unlock more time! 📚`;
+      message += `Great job playing today! Come back tomorrow! 🌟`;
     }
     
-    setMascotType(type);
+    setMascotType('happy');
     setMascotMessage(message);
     setShowMascot(true);
   };
   
-  const handleTimeCardPress = () => {
+  const handleStreakCardPress = () => {
     // Play button press sound
     SoundService.playButtonPress();
     
-    // Show time info in mascot message
+    // Show stats in mascot
     handlePeekingMascotPress();
   };
   
@@ -286,7 +351,7 @@ const HomeScreen = ({ navigation }) => {
   };
   
   const getCategoryColor = (category) => {
-    // Map categories to colors (similar to web version)
+    // Map categories to colors
     const colorMap = {
       'funfacts': theme.colors.primary,
       'psychology': '#FF6B6B',
@@ -313,8 +378,6 @@ const HomeScreen = ({ navigation }) => {
     
     return descriptions[category] || 'Answer to earn time';
   };
-  
-  const formattedTime = EnhancedTimerService.formatTime(availableTime);
   
   // Ensure we have valid animation values for categories
   const getAnimValue = (index) => {
@@ -347,14 +410,15 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>Learn and earn app time!</Text>
           </View>
           
+          {/* Daily Streak Card */}
           <TouchableOpacity 
             style={[
-              styles.timeCard,
+              styles.streakCard,
               {
-                opacity: timeCardAnim,
+                opacity: streakCardAnim,
                 transform: [
                   { 
-                    translateY: timeCardAnim.interpolate({
+                    translateY: streakCardAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: [20, 0]
                     })
@@ -362,51 +426,72 @@ const HomeScreen = ({ navigation }) => {
                 ]
               }
             ]}
-            onPress={handleTimeCardPress}
+            onPress={handleStreakCardPress}
             activeOpacity={0.8}
           >
-            {/* Enhanced icon with pulse animation */}
-            <Animated.View
-              style={{
-                transform: [
-                  { scale: bounceAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 1.1]
-                  })}
-                ]
-              }}
-            >
-              <Icon name="timer-sand" size={40} color={theme.colors.primary} />
-            </Animated.View>
-            <Text style={styles.timeTitle}>Available App Time</Text>
-            <Text style={styles.timeValue}>{formattedTime}</Text>
-            
-            {/* Time status indicator */}
-            <View style={[
-              styles.timeStatus,
-              availableTime <= 0 ? styles.timeStatusEmpty :
-              availableTime < 300 ? styles.timeStatusLow :
-              styles.timeStatusGood
-            ]}>
-              <Icon 
-                name={
-                  availableTime <= 0 ? "alert-circle" :
-                  availableTime < 300 ? "clock-alert" :
-                  "check-circle"
-                } 
-                size={16} 
-                color="white" 
-              />
-              <Text style={styles.timeStatusText}>
-                {availableTime <= 0 ? "No time" :
-                 availableTime < 300 ? "Low time" :
-                 "Good time"}
-              </Text>
+            <View style={styles.streakHeader}>
+              <Animated.View
+                style={{
+                  transform: [
+                    { translateY: bounceAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -5]
+                    })}
+                  ]
+                }}
+              >
+                <Icon 
+                  name="fire" 
+                  size={40} 
+                  color={dailyStreak > 0 ? '#FF5722' : '#ccc'} 
+                />
+              </Animated.View>
+              <View style={styles.streakInfo}>
+                <Text style={styles.streakTitle}>Daily Streak</Text>
+                <Text style={styles.streakValue}>{dailyStreak} day{dailyStreak !== 1 ? 's' : ''}</Text>
+              </View>
+              <View style={styles.streakStats}>
+                <View style={styles.statItem}>
+                  <Icon name="star" size={16} color="#FFD700" />
+                  <Text style={styles.statValue}>{totalScore.toLocaleString()}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Icon name="timer" size={16} color="#4CAF50" />
+                  <Text style={styles.statValue}>{EnhancedTimerService.formatTime(availableTime)}</Text>
+                </View>
+              </View>
             </View>
             
-            <Text style={styles.timeSubtext}>
-              {availableTime <= 0 ? "Complete quizzes to unlock apps" :
-               "Tap for details"}
+            {/* Streak calendar preview */}
+            <View style={styles.streakCalendar}>
+              {[...Array(7)].map((_, index) => {
+                const date = new Date();
+                date.setDate(date.getDate() - (6 - index));
+                const isToday = index === 6;
+                const isPlayed = index < 6 ? (dailyStreak > (6 - index)) : hasPlayedToday;
+                
+                return (
+                  <View key={index} style={styles.calendarDay}>
+                    <Text style={styles.calendarDayText}>
+                      {date.toLocaleDateString('en', { weekday: 'narrow' })}
+                    </Text>
+                    <View style={[
+                      styles.calendarDot,
+                      isPlayed && styles.calendarDotActive,
+                      isToday && styles.calendarDotToday
+                    ]}>
+                      {isPlayed && <Icon name="check" size={12} color="white" />}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            
+            <Text style={styles.streakMessage}>
+              {!hasPlayedToday ? 
+                "Play today to continue your streak!" : 
+                "Great job! Come back tomorrow!"
+              }
             </Text>
           </TouchableOpacity>
           
@@ -477,7 +562,7 @@ const HomeScreen = ({ navigation }) => {
               { opacity: fadeAnim }
             ]}
           >
-            <Text style={styles.quickStatsTitle}>Quick Tips</Text>
+            <Text style={styles.quickStatsTitle}>How to Earn</Text>
             <View style={styles.quickStatsGrid}>
               <View style={styles.quickStatItem}>
                 <Icon name="check-circle" size={20} color="#4CAF50" />
@@ -488,12 +573,12 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.quickStatText}>5 streak = 2min bonus</Text>
               </View>
               <View style={styles.quickStatItem}>
-                <Icon name="timer" size={20} color="#2196F3" />
-                <Text style={styles.quickStatText}>Fast answers = more points</Text>
+                <Icon name="calendar-check" size={20} color="#2196F3" />
+                <Text style={styles.quickStatText}>Daily play = streak</Text>
               </View>
               <View style={styles.quickStatItem}>
                 <Icon name="brain" size={20} color="#9C27B0" />
-                <Text style={styles.quickStatText}>Learning makes you smarter</Text>
+                <Text style={styles.quickStatText}>Learning = smarter</Text>
               </View>
             </View>
           </Animated.View>
@@ -502,7 +587,7 @@ const HomeScreen = ({ navigation }) => {
         </ScrollView>
       </Animated.View>
       
-      {/* Enhanced Mascot - Home Screen with time display functionality only */}
+      {/* Enhanced Mascot */}
       <EnhancedMascotDisplay
         type={mascotType}
         position="left"
@@ -558,59 +643,83 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
   },
-  timeCard: {
+  streakCard: {
     backgroundColor: 'white',
     borderRadius: theme.borderRadius.lg,
     padding: 20,
-    alignItems: 'center',
     marginBottom: 24,
     ...theme.shadows.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 159, 28, 0.1)',
+    borderColor: 'rgba(255, 87, 34, 0.1)',
   },
-  timeTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 8,
-    color: theme.colors.textDark,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  timeValue: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-    marginBottom: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Black' : 'sans-serif-black',
-  },
-  timeStatus: {
+  streakHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  timeStatusEmpty: {
-    backgroundColor: '#F44336',
+  streakInfo: {
+    flex: 1,
+    marginLeft: 16,
   },
-  timeStatusLow: {
-    backgroundColor: '#FF9800',
+  streakTitle: {
+    fontSize: 16,
+    color: theme.colors.textMuted,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
   },
-  timeStatusGood: {
-    backgroundColor: '#4CAF50',
-  },
-  timeStatusText: {
-    color: 'white',
-    fontSize: 12,
+  streakValue: {
+    fontSize: 24,
     fontWeight: 'bold',
-    marginLeft: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+    color: theme.colors.textDark,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Black' : 'sans-serif-black',
   },
-  timeSubtext: {
+  streakStats: {
+    alignItems: 'flex-end',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  statValue: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: theme.colors.textDark,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
+  },
+  streakCalendar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarDay: {
+    alignItems: 'center',
+  },
+  calendarDayText: {
     fontSize: 12,
     color: theme.colors.textMuted,
+    marginBottom: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+  },
+  calendarDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarDotActive: {
+    backgroundColor: '#4CAF50',
+  },
+  calendarDotToday: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
+  streakMessage: {
+    fontSize: 14,
+    color: theme.colors.textMuted,
     textAlign: 'center',
+    fontStyle: 'italic',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
   sectionHeader: {

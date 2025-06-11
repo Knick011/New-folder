@@ -1,5 +1,5 @@
-// src/services/EnhancedTimerService.js - FIXED VERSION
-import { AppState, Platform, NativeModules } from 'react-native';
+// src/services/EnhancedTimerService.js - FIXED VERSION with immediate updates
+import { AppState, Platform, NativeModules, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
 
@@ -31,18 +31,19 @@ class EnhancedTimerService {
   setupNativeTimer() {
     if (!BrainBitesTimer) return;
     
-    // Create event emitter for native timer updates
-    const { NativeEventEmitter } = require('react-native');
-    this.eventEmitter = new NativeEventEmitter(BrainBitesTimer);
-    
     // Start listening to native timer
     BrainBitesTimer.startListening();
     
-    // Subscribe to timer updates
-    this.subscription = this.eventEmitter.addListener('timerUpdate', (data) => {
+    // Subscribe to timer updates using DeviceEventEmitter for better compatibility
+    this.subscription = DeviceEventEmitter.addListener('timerUpdate', (data) => {
       this.availableTime = data.remainingTime || 0;
       const isTracking = data.isTracking || false;
       const isAppForeground = data.isAppForeground || false;
+      
+      // Only log every 10 seconds to reduce spam
+      if (this.availableTime % 10 === 0) {
+        console.log(`Timer update: ${this.availableTime}s, tracking: ${isTracking}`);
+      }
       
       this._notifyListeners('timeUpdate', {
         remaining: this.availableTime,
@@ -66,14 +67,16 @@ class EnhancedTimerService {
     if (this.useNativeTimer && BrainBitesTimer) {
       if (nextAppState === 'active') {
         this.isBrainBitesActive = true;
-        // Notify native service that BrainBites is in foreground
-        const intent = 'app_foreground';
-        BrainBitesTimer.notifyAppState && BrainBitesTimer.notifyAppState(intent);
+        BrainBitesTimer.notifyAppState('app_foreground');
       } else {
         this.isBrainBitesActive = false;
-        // Notify native service that BrainBites went to background
-        const intent = 'app_background';
-        BrainBitesTimer.notifyAppState && BrainBitesTimer.notifyAppState(intent);
+        BrainBitesTimer.notifyAppState('app_background');
+        
+        // Force start timer when going to background if we have time
+        if (this.availableTime > 0) {
+          console.log('Starting timer as app goes to background');
+          BrainBitesTimer.startTracking();
+        }
       }
     }
   }
@@ -84,6 +87,12 @@ class EnhancedTimerService {
         // Get time from native service
         const time = await BrainBitesTimer.getRemainingTime();
         this.availableTime = time;
+        console.log('Loaded time from native:', time);
+        
+        // Start timer if we have time
+        if (time > 0) {
+          BrainBitesTimer.startTracking();
+        }
       } else {
         // Fallback to AsyncStorage
         const data = await AsyncStorage.getItem(this.STORAGE_KEY);
@@ -125,18 +134,35 @@ class EnhancedTimerService {
     if (this.useNativeTimer && BrainBitesTimer) {
       // Add time through native service
       BrainBitesTimer.addTime(seconds);
+      
+      // Update local value immediately for UI
+      this.availableTime += seconds;
+      
+      // Notify listeners immediately
+      this._notifyListeners('creditsAdded', { 
+        seconds, 
+        newTotal: this.availableTime 
+      });
+      
+      // Force an immediate update
+      setTimeout(() => {
+        this._notifyListeners('timeUpdate', {
+          remaining: this.availableTime,
+          isTracking: !this.isBrainBitesActive
+        });
+      }, 100);
     } else {
       // JavaScript fallback
       this.availableTime += seconds;
       this.saveTimeData();
+      
+      this._notifyListeners('creditsAdded', { 
+        seconds, 
+        newTotal: this.availableTime 
+      });
     }
     
-    this._notifyListeners('creditsAdded', { 
-      seconds, 
-      newTotal: this.availableTime + seconds 
-    });
-    
-    return this.availableTime + seconds;
+    return this.availableTime;
   }
   
   getAvailableTime() {
@@ -159,6 +185,14 @@ class EnhancedTimerService {
   
   addEventListener(callback) {
     this.listeners.push(callback);
+    
+    // Immediately send current state
+    callback({
+      event: 'timeUpdate',
+      remaining: this.availableTime,
+      isTracking: !this.isBrainBitesActive && this.availableTime > 0
+    });
+    
     return () => {
       this.listeners = this.listeners.filter(listener => listener !== callback);
     };

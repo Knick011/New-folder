@@ -27,13 +27,8 @@ class BrainBitesTimerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     
     private var remainingTimeSeconds = 0
-    private var appForegroundStartTime = 0L
     private var isAppInForeground = false
     private var lastTickTime = 0L
-    
-    // Event log for debugging
-    private val eventLog = mutableListOf<String>()
-    private val maxLogEntries = 5
     
     companion object {
         private const val TAG = "BrainBitesTimer"
@@ -64,8 +59,12 @@ class BrainBitesTimerService : Service() {
         loadSavedTime()
         acquireWakeLock()
         
+        // Start the timer immediately if we have time
+        if (remainingTimeSeconds > 0) {
+            startTimer()
+        }
+        
         Log.d(TAG, "BrainBitesTimerService created with saved time: $remainingTimeSeconds")
-        addLogEntry("Timer service started")
     }
 
     private fun acquireWakeLock() {
@@ -106,6 +105,12 @@ class BrainBitesTimerService : Service() {
             }
             ACTION_APP_BACKGROUND -> {
                 handleAppBackground()
+            }
+            else -> {
+                // Default action - start timer if we have time
+                if (remainingTimeSeconds > 0) {
+                    startTimer()
+                }
             }
         }
         
@@ -171,7 +176,7 @@ class BrainBitesTimerService : Service() {
         handler.post(timerRunnable!!)
         
         broadcastUpdate()
-        addLogEntry("Timer started")
+        Log.d(TAG, "Timer started successfully")
     }
     
     private fun stopTimer() {
@@ -181,7 +186,6 @@ class BrainBitesTimerService : Service() {
             timerRunnable = null
         }
         saveTime()
-        addLogEntry("Timer stopped")
     }
     
     private fun tick() {
@@ -192,19 +196,19 @@ class BrainBitesTimerService : Service() {
         val isScreenOn = powerManager.isInteractive
         val isLocked = keyguardManager.isKeyguardLocked
         
-        // Only count down if:
+        // The key fix: Timer should run when:
         // 1. Screen is ON
         // 2. Device is NOT locked
-        // 3. BrainBites app is NOT in foreground
+        // 3. BrainBites app is NOT in foreground (i.e., user is using other apps)
         // 4. We have remaining time
         val shouldDeductTime = isScreenOn && !isLocked && !isAppInForeground && remainingTimeSeconds > 0
         
         if (shouldDeductTime && elapsedSeconds > 0) {
             remainingTimeSeconds = maxOf(0, remainingTimeSeconds - elapsedSeconds)
             
-            // Log every 30 seconds
-            if (remainingTimeSeconds % 30 == 0) {
-                addLogEntry("Tracking: ${formatTime(remainingTimeSeconds)} left")
+            // Log every 10 seconds for debugging
+            if (remainingTimeSeconds % 10 == 0) {
+                Log.d(TAG, "Timer running: ${formatTime(remainingTimeSeconds)} left")
             }
             
             // Check for low time warnings
@@ -213,13 +217,18 @@ class BrainBitesTimerService : Service() {
                 60 -> showLowTimeNotification(1)   // 1 minute warning
                 0 -> handleTimeExpired()
             }
+        } else {
+            // Log why timer isn't counting
+            if (remainingTimeSeconds % 10 == 0 && remainingTimeSeconds > 0) {
+                Log.d(TAG, "Timer paused - Screen: $isScreenOn, Locked: $isLocked, BrainBites: ${if (isAppInForeground) "FOREGROUND" else "BACKGROUND"}")
+            }
         }
         
-        // Update notification every second for live countdown
+        // Update notification every second
         updateNotification()
         
-        // Save time every 10 seconds
-        if (remainingTimeSeconds % 10 == 0) {
+        // Save time every 5 seconds
+        if (remainingTimeSeconds % 5 == 0) {
             saveTime()
         }
         
@@ -230,8 +239,6 @@ class BrainBitesTimerService : Service() {
     private fun handleAppForeground() {
         if (!isAppInForeground) {
             isAppInForeground = true
-            appForegroundStartTime = System.currentTimeMillis()
-            addLogEntry("BrainBites opened (timer paused)")
             Log.d(TAG, "BrainBites entered foreground - timer paused")
         }
     }
@@ -239,18 +246,17 @@ class BrainBitesTimerService : Service() {
     private fun handleAppBackground() {
         if (isAppInForeground) {
             isAppInForeground = false
-            
-            // Don't add back time for BrainBites - it's a learning app
-            addLogEntry("BrainBites minimized (timer resumed)")
             Log.d(TAG, "BrainBites left foreground - timer resumed")
             
-            saveTime()
+            // Ensure timer is running
+            if (remainingTimeSeconds > 0 && timerRunnable == null) {
+                startTimer()
+            }
         }
     }
     
     private fun handleTimeExpired() {
         Log.d(TAG, "Time expired!")
-        addLogEntry("⏰ TIME EXPIRED!")
         
         // Show high priority notification
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -297,19 +303,21 @@ class BrainBitesTimerService : Service() {
         val statusText = when {
             remainingTimeSeconds <= 0 -> "Complete quizzes to earn time!"
             isAppInForeground -> "BrainBites Open (Paused)"
-            !powerManager.isInteractive -> "Screen Off"
-            keyguardManager.isKeyguardLocked -> "Device Locked"
-            else -> "Tracking Screen Time"
+            !powerManager.isInteractive -> "Screen Off (Paused)"
+            keyguardManager.isKeyguardLocked -> "Device Locked (Paused)"
+            else -> "Timer Running"
         }
         
+        // Create notification with enhanced styling
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
-            .setContentTitle("App Time: $timeText")
+            .setContentTitle("Screen Time: $timeText")
             .setContentText(statusText)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
+            .setColor(0xFFFF9F1C.toInt()) // Orange color
             .build()
     }
     
@@ -321,14 +329,12 @@ class BrainBitesTimerService : Service() {
     private fun updateRemainingTime(newTime: Int) {
         remainingTimeSeconds = newTime
         saveTime()
-        addLogEntry("Time set to ${formatTime(newTime)}")
         Log.d(TAG, "Updated remaining time to $newTime seconds")
     }
     
     private fun addTime(seconds: Int) {
         remainingTimeSeconds += seconds
         saveTime()
-        addLogEntry("+${seconds}s added (${formatTime(remainingTimeSeconds)} total)")
         Log.d(TAG, "Added $seconds seconds, new total: $remainingTimeSeconds")
         
         // Start timer if it wasn't running
@@ -339,20 +345,6 @@ class BrainBitesTimerService : Service() {
         // Update notification immediately
         updateNotification()
         broadcastUpdate()
-    }
-    
-    private fun addLogEntry(message: String) {
-        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        val entry = "$timestamp: $message"
-        
-        eventLog.add(entry)
-        
-        // Keep only last N entries
-        if (eventLog.size > maxLogEntries) {
-            eventLog.removeAt(0)
-        }
-        
-        Log.d(TAG, "Event: $entry")
     }
     
     private fun loadSavedTime() {
