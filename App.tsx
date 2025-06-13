@@ -12,6 +12,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AudioTimerTestScreen from './src/screens/AudioTimerTestScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
 
 // Import services - only use EnhancedTimerService
 import EnhancedTimerService from './src/services/EnhancedTimerService';
@@ -110,6 +111,7 @@ const App = () => {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           {__DEV__ && (
             <Stack.Screen name="AudioTimerTest" component={AudioTimerTestScreen} />
           )}

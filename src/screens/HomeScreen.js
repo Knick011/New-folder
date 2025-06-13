@@ -397,17 +397,23 @@ const HomeScreen = ({ navigation }) => {
         ]}
       >
         <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          {/* Settings button */}
-          <TouchableOpacity 
-            style={styles.settingsButton}
-            onPress={handleOpenSettings}
-          >
-            <Icon name="cog" size={24} color="#333" />
-          </TouchableOpacity>
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.leaderboardButton}
+              onPress={() => navigation.navigate('Leaderboard')}
+            >
+              <Icon name="trophy" size={24} color="#FFD700" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.settingsButton}
+              onPress={handleOpenSettings}
+            >
+              <Icon name="cog" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.header}>
-            <Text style={styles.title}>Brain Bites Mobile</Text>
-            <Text style={styles.subtitle}>Learn and earn app time!</Text>
+            {/* Removed the title and subtitle here */}
           </View>
           
           {/* Daily Streak Card */}
@@ -613,6 +619,27 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  leaderboardButton: {
+    position: 'absolute',
+    top: 16,
+    right: 60,
+    zIndex: 10,
+    backgroundColor: 'white',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.sm,
+  },
   settingsButton: {
     position: 'absolute',
     top: 16,
@@ -626,27 +653,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadows.sm,
   },
-  header: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.colors.textDark,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-black',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.colors.textMuted,
-    marginTop: 8,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
-  },
   streakCard: {
     backgroundColor: 'white',
     borderRadius: theme.borderRadius.lg,
     padding: 20,
+    marginTop: 20,
     marginBottom: 24,
     ...theme.shadows.md,
     borderWidth: 1,
