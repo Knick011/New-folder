@@ -16,11 +16,12 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
-import ScoreService from '../services/ScoreService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../styles/theme';
 import commonStyles from '../styles/commonStyles';
+import TimeManagementDisplay from '../components/TimeManagementDisplay';
 
 const { width } = Dimensions.get('window');
 
@@ -28,12 +29,17 @@ const HomeScreen = ({ navigation }) => {
   const [availableTime, setAvailableTime] = useState(0);
   const [dailyStreak, setDailyStreak] = useState(0);
   const [hasPlayedToday, setHasPlayedToday] = useState(false);
-  const [totalScore, setTotalScore] = useState(0);
   const [categories, setCategories] = useState(['funfacts', 'psychology']);
   const [showMascot, setShowMascot] = useState(false);
   const [mascotType, setMascotType] = useState('happy');
   const [mascotMessage, setMascotMessage] = useState(null);
   const [mascotEnabled, setMascotEnabled] = useState(true);
+  const [scoreInfo, setScoreInfo] = useState({
+    dailyScore: 0,
+    currentStreak: 0,
+    totalDaysPlayed: 0,
+    allTimeHighScore: 0
+  });
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -64,14 +70,39 @@ const HomeScreen = ({ navigation }) => {
     startEntranceAnimations();
     
     // Show welcome mascot after a delay
-    setTimeout(() => {
+    const welcomeTimer = setTimeout(() => {
       if (mascotEnabled) {
         showInitialMascotMessage();
       }
     }, 2000);
+
+    // Listen for daily reset events
+    const scoreListener = EnhancedScoreService.addEventListener((event) => {
+      if (['dailyReset', 'scoreUpdated', 'penaltyApplied'].includes(event.event)) {
+        loadInitialData();
+      }
+      if (event.event === 'dailyReset') {
+        handleDailyReset(event);
+      } else if (event.event === 'showMessage') {
+        if (event.type === 'dailyReset' && mascotEnabled) {
+          setMascotType('excited');
+          setMascotMessage(event.message);
+          setShowMascot(true);
+        } else if (event.type === 'penalty' && mascotEnabled) {
+          setMascotType('depressed');
+          setMascotMessage(event.message);
+          setShowMascot(true);
+        } else if (event.type === 'rollover' && mascotEnabled) {
+          setMascotType('excited');
+          setMascotMessage(event.message);
+          setShowMascot(true);
+        }
+      }
+    });
     
     return () => {
-      // Cleanup
+      clearTimeout(welcomeTimer);
+      scoreListener();
     };
   }, []);
   
@@ -107,10 +138,15 @@ const HomeScreen = ({ navigation }) => {
         }
       }
       
-      // Load total score
-      await ScoreService.loadSavedData();
-      const scoreInfo = ScoreService.getScoreInfo();
-      setTotalScore(scoreInfo.totalScore);
+      // Load score info
+      await EnhancedScoreService.loadSavedData();
+      const scoreData = EnhancedScoreService.getScoreInfo();
+      setScoreInfo({
+        dailyScore: scoreData.dailyScore,
+        currentStreak: scoreData.currentStreak,
+        totalDaysPlayed: scoreData.totalDaysPlayed,
+        allTimeHighScore: scoreData.allTimeHighScore
+      });
       
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -304,22 +340,39 @@ const HomeScreen = ({ navigation }) => {
     setShowMascot(false);
   };
   
-  // Handle peeking mascot press to show stats
+  const handleDailyReset = (resetData) => {
+    // Play celebration sound
+    SoundService.playStreak();
+    
+    // Update daily streak if they played yesterday
+    if (resetData.yesterdayScore > 0) {
+      setDailyStreak(dailyStreak + 1);
+    } else {
+      setDailyStreak(0);
+    }
+    
+    // Reset "played today" flag
+    setHasPlayedToday(false);
+  };
+  
   const handlePeekingMascotPress = () => {
     if (!mascotEnabled) return;
     
     const time = EnhancedTimerService.getAvailableTime();
     const formattedTime = EnhancedTimerService.formatTime(time);
     
-    let message = `📊 Your Stats:\n\n`;
-    message += `🔥 Daily Streak: ${dailyStreak} day${dailyStreak !== 1 ? 's' : ''}\n`;
-    message += `⭐ Total Score: ${totalScore.toLocaleString()}\n`;
-    message += `⏱️ App Time: ${formattedTime}\n\n`;
+    let message = `📊 Today's Stats:\n\n`;
+    message += `🎯 Daily Score: ${(scoreInfo.dailyScore ?? 0).toLocaleString()}\n`;
+    message += `🔥 Current Streak: ${scoreInfo.currentStreak ?? 0}\n`;
+    message += `⏱️ App Time: ${formattedTime}\n`;
+    message += `📅 Days Played: ${scoreInfo.totalDaysPlayed ?? 0}\n\n`;
     
-    if (!hasPlayedToday) {
-      message += `Play a quiz today to continue your streak! 💪`;
+    if ((scoreInfo.dailyScore ?? 0) < 0) {
+      message += `⚠️ You're in overtime debt!\nEarn points to get back to positive! 💪`;
+    } else if (!hasPlayedToday) {
+      message += `Play a quiz to maintain your streak! 🚀`;
     } else {
-      message += `Great job playing today! Come back tomorrow! 🌟`;
+      message += `Keep going! Beat your best: ${(scoreInfo.allTimeHighScore ?? 0).toLocaleString()} 🏆`;
     }
     
     setMascotType('happy');
@@ -459,7 +512,7 @@ const HomeScreen = ({ navigation }) => {
               <View style={styles.streakStats}>
                 <View style={styles.statItem}>
                   <Icon name="star" size={16} color="#FFD700" />
-                  <Text style={styles.statValue}>{totalScore.toLocaleString()}</Text>
+                  <Text style={styles.statValue}>{(scoreInfo.dailyScore ?? 0).toLocaleString()}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Icon name="timer" size={16} color="#4CAF50" />
@@ -500,6 +553,12 @@ const HomeScreen = ({ navigation }) => {
               }
             </Text>
           </TouchableOpacity>
+          
+          {/* Time Management Display */}
+          <TimeManagementDisplay 
+            style={{ marginTop: 0 }}
+            onPress={handlePeekingMascotPress}
+          />
           
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Quiz Categories</Text>
@@ -845,6 +904,34 @@ const styles = StyleSheet.create({
   },
   footer: {
     height: 100, // Extra space at bottom to avoid mascot overlap
+  },
+  dailyScoreCard: {
+    backgroundColor: theme.colors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dailyScoreContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dailyScoreTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    flex: 1,
+    marginLeft: 12,
+  },
+  dailyScoreValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
   },
 });
 

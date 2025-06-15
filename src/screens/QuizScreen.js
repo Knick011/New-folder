@@ -17,7 +17,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import QuizService from '../services/QuizService';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import SoundService from '../services/SoundService';
-import ScoreService from '../services/ScoreService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
 import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 
 const QuizScreen = ({ navigation, route }) => {
@@ -32,7 +32,7 @@ const QuizScreen = ({ navigation, route }) => {
   const [category, setCategory] = useState(route.params?.category || 'funfacts');
   const [showPointsAnimation, setShowPointsAnimation] = useState(false);
   const [pointsEarned, setPointsEarned] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
+  const [score, setScore] = useState(0);
   const [streakLevel, setStreakLevel] = useState(0);
   const [isStreakMilestone, setIsStreakMilestone] = useState(false);
   
@@ -62,10 +62,10 @@ const QuizScreen = ({ navigation, route }) => {
     SoundService.startGameMusic();
     
     // Initialize Score Service
-    ScoreService.loadSavedData().then(() => {
-      const scoreInfo = ScoreService.getScoreInfo();
+    EnhancedScoreService.loadSavedData().then(() => {
+      const scoreInfo = EnhancedScoreService.getScoreInfo();
       setStreak(scoreInfo.currentStreak);
-      setTotalScore(scoreInfo.totalScore);
+      setScore(scoreInfo.dailyScore ?? 0);
       setStreakLevel(scoreInfo.streakLevel);
     });
     
@@ -169,7 +169,7 @@ const QuizScreen = ({ navigation, route }) => {
       
       // Record start time for scoring
       questionStartTime.current = Date.now();
-      ScoreService.startQuestionTimer();
+      EnhancedScoreService.startQuestionTimer();
       
     } catch (error) {
       console.error('Error loading question:', error);
@@ -192,7 +192,7 @@ const QuizScreen = ({ navigation, route }) => {
     }, 500);
     
     // Score the answer (incorrect)
-    const scoreResult = ScoreService.recordAnswer(false);
+    const scoreResult = EnhancedScoreService.recordAnswer(false);
     setStreak(0);
     
     // Play incorrect sound
@@ -224,12 +224,12 @@ const QuizScreen = ({ navigation, route }) => {
     setIsCorrect(correct);
     
     // Score the answer
-    const scoreResult = ScoreService.recordAnswer(correct);
+    const scoreResult = EnhancedScoreService.recordAnswer(correct);
     
     if (correct) {
       // Update UI based on score result
       setStreak(scoreResult.currentStreak);
-      setTotalScore(scoreResult.totalScore);
+      setScore(scoreResult.dailyScore);
       setStreakLevel(scoreResult.streakLevel);
       setIsStreakMilestone(scoreResult.isStreakMilestone);
       setPointsEarned(scoreResult.pointsEarned);
@@ -323,6 +323,12 @@ const QuizScreen = ({ navigation, route }) => {
         showExplanationWithAnimation();
       }, 2000);
     }
+    
+    // After scoring, reload score info to update UI
+    const updatedScoreInfo = EnhancedScoreService.getScoreInfo();
+    setScore(updatedScoreInfo.dailyScore ?? 0);
+    setStreak(updatedScoreInfo.currentStreak);
+    setStreakLevel(updatedScoreInfo.streakLevel);
   };
   
   const showExplanationWithAnimation = () => {
@@ -413,11 +419,13 @@ const QuizScreen = ({ navigation, route }) => {
   const handleGoBack = () => {
     // Play button sound
     SoundService.playButtonPress();
-    
     // Hide mascot if showing
     setShowMascot(false);
-    
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Home');
+    }
   };
   
   // Get reward text
@@ -471,7 +479,7 @@ const QuizScreen = ({ navigation, route }) => {
           
           <View style={styles.scoreContainer}>
             <Icon name="star" size={18} color="#FF9F1C" />
-            <Text style={styles.scoreText}>{totalScore}</Text>
+            <Text style={styles.scoreText}>{score}</Text>
           </View>
           
           <Animated.View 

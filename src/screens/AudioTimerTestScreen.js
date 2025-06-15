@@ -179,7 +179,13 @@ const AudioTimerTestScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Home');
+            }
+          }} style={styles.backButton}>
             <Icon name="arrow-left" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.title}>Audio & Timer Test</Text>

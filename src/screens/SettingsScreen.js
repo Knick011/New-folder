@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
 import SoundService from '../services/SoundService';
-import ScoreService from '../services/ScoreService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
 import NotificationService from '../services/NotificationService';
 
 const SettingsScreen = ({ navigation }) => {
@@ -25,8 +25,8 @@ const SettingsScreen = ({ navigation }) => {
   const [milestoneReward, setMilestoneReward] = useState(120); // Seconds for milestone
   const [showMascot, setShowMascot] = useState(true);
   const [soundsEnabled, setSoundsEnabled] = useState(true);
-  const [totalScore, setTotalScore] = useState(0);
   const [highestStreak, setHighestStreak] = useState(0);
+  const [scoreInfo, setScoreInfo] = useState(null);
   const [appVersion, setAppVersion] = useState("1.0.0");
   
   useEffect(() => {
@@ -65,11 +65,10 @@ const SettingsScreen = ({ navigation }) => {
   
   const loadScoreData = async () => {
     try {
-      // Load score and streak data
-      await ScoreService.loadSavedData();
-      const scoreInfo = ScoreService.getScoreInfo();
-      setTotalScore(scoreInfo.totalScore);
-      setHighestStreak(scoreInfo.highestStreak);
+      await EnhancedScoreService.loadSavedData();
+      const info = EnhancedScoreService.getScoreInfo();
+      setScoreInfo(info);
+      setHighestStreak(info.highestStreak);
     } catch (error) {
       console.error('Error loading score data:', error);
     }
@@ -103,7 +102,7 @@ const SettingsScreen = ({ navigation }) => {
               
               // Reset services
               await QuizService.resetUsedQuestions();
-              ScoreService.resetSession();
+              EnhancedScoreService.resetSession();
               
               // Reload data
               loadSettings();
@@ -172,7 +171,11 @@ const SettingsScreen = ({ navigation }) => {
   const handleGoBack = () => {
     // Play button sound
     SoundService.playButtonPress();
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Home');
+    }
   };
   
   return (
@@ -197,14 +200,29 @@ const SettingsScreen = ({ navigation }) => {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Icon name="star" size={28} color="#FF9F1C" style={styles.statIcon} />
-              <Text style={styles.statValue}>{totalScore.toLocaleString()}</Text>
-              <Text style={styles.statLabel}>Total Score</Text>
+              <Text style={styles.statValue}>{(scoreInfo?.dailyScore ?? 0).toLocaleString()}</Text>
+              <Text style={styles.statLabel}>Daily Score</Text>
             </View>
             
             <View style={styles.statItem}>
               <Icon name="fire" size={28} color="#FF9F1C" style={styles.statIcon} />
               <Text style={styles.statValue}>{highestStreak}</Text>
               <Text style={styles.statLabel}>Highest Streak</Text>
+            </View>
+          </View>
+
+          {/* Time Management Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Icon name="clock-alert" size={28} color="#F44336" style={styles.statIcon} />
+              <Text style={styles.statValue}>-{scoreInfo?.overtimePenalty}</Text>
+              <Text style={styles.statLabel}>Overtime Penalty</Text>
+            </View>
+            
+            <View style={styles.statItem}>
+              <Icon name="piggy-bank" size={28} color="#4CAF50" style={styles.statIcon} />
+              <Text style={styles.statValue}>+{scoreInfo?.dailyRolloverBonus}</Text>
+              <Text style={styles.statLabel}>Saved Time Bonus</Text>
             </View>
           </View>
         </View>
