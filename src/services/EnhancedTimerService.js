@@ -2,6 +2,7 @@
 import { AppState, Platform, NativeModules, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './NotificationService';
+import AnalyticsService from './AnalyticsService';
 
 const { BrainBitesTimer } = NativeModules;
 
@@ -26,6 +27,11 @@ class EnhancedTimerService {
     
     // Listen to app state changes
     this.appStateSubscription = AppState.addEventListener('change', this._handleAppStateChange);
+    
+    this.sessionStartTime = Date.now();
+    this.lastActiveTime = Date.now();
+    this.totalSessionTime = 0;
+    this.isTrackingSession = false;
   }
   
   setupNativeTimer() {
@@ -39,6 +45,19 @@ class EnhancedTimerService {
       this.availableTime = data.remainingTime || 0;
       const isTracking = data.isTracking || false;
       const isAppForeground = data.isAppForeground || false;
+      
+      // Track session time when app is active
+      if (isAppForeground) {
+        const currentTime = Date.now();
+        const timeDiff = currentTime - this.lastActiveTime;
+        this.totalSessionTime += timeDiff;
+        this.lastActiveTime = currentTime;
+        
+        // Log session time every 5 minutes
+        if (this.totalSessionTime % (5 * 60 * 1000) < 1000) {
+          AnalyticsService.trackUserEngagement(this.totalSessionTime / 1000, 0);
+        }
+      }
       
       // Only log every 10 seconds to reduce spam
       if (this.availableTime % 10 === 0) {
@@ -128,41 +147,85 @@ class EnhancedTimerService {
     }
   }
   
-  addTimeCredits(seconds) {
-    console.log(`Adding ${seconds} seconds of screen time`);
+  async startTracking() {
+    if (this.isBrainBitesActive) return;
     
     if (this.useNativeTimer && BrainBitesTimer) {
-      // Add time through native service
-      BrainBitesTimer.addTime(seconds);
-      
-      // Update local value immediately for UI
-      this.availableTime += seconds;
-      
-      // Notify listeners immediately
-      this._notifyListeners('creditsAdded', { 
-        seconds, 
-        newTotal: this.availableTime 
-      });
-      
-      // Force an immediate update
-      setTimeout(() => {
-        this._notifyListeners('timeUpdate', {
-          remaining: this.availableTime,
-          isTracking: !this.isBrainBitesActive
-        });
-      }, 100);
+      BrainBitesTimer.startTracking();
     } else {
-      // JavaScript fallback
-      this.availableTime += seconds;
-      this.saveTimeData();
-      
-      this._notifyListeners('creditsAdded', { 
-        seconds, 
-        newTotal: this.availableTime 
-      });
+      this.startTimer();
     }
     
-    return this.availableTime;
+    // Start session tracking
+    this.sessionStartTime = Date.now();
+    this.lastActiveTime = Date.now();
+    this.isTrackingSession = true;
+    
+    // Track timer start
+    await AnalyticsService.trackQuizEvent('timer_started', {
+      available_time: this.availableTime,
+      is_native_timer: this.useNativeTimer,
+      session_start_time: this.sessionStartTime
+    });
+  }
+
+  async stopTracking() {
+    if (this.useNativeTimer && BrainBitesTimer) {
+      BrainBitesTimer.stopTracking();
+    } else {
+      this.stopTimer();
+    }
+    
+    // Calculate final session time
+    const sessionDuration = (Date.now() - this.sessionStartTime) / 1000;
+    this.totalSessionTime += sessionDuration;
+    this.isTrackingSession = false;
+    
+    // Track timer stop with session duration
+    await AnalyticsService.trackQuizEvent('timer_stopped', {
+      remaining_time: this.availableTime,
+      is_native_timer: this.useNativeTimer,
+      session_duration: Math.round(sessionDuration),
+      total_session_time: Math.round(this.totalSessionTime / 1000)
+    });
+  }
+
+  async addTime(seconds) {
+    const previousTime = this.availableTime;
+    this.availableTime += seconds;
+    
+    // Track time added
+    await AnalyticsService.trackTimeEarned(seconds, 'manual_add', this.availableTime);
+    
+    if (this.useNativeTimer && BrainBitesTimer) {
+      BrainBitesTimer.updateTime(this.availableTime);
+    }
+    
+    this._notifyListeners('timeUpdate', {
+      remaining: this.availableTime,
+      isTracking: !this.isBrainBitesActive && this.availableTime > 0
+    });
+  }
+
+  async deductTime(seconds) {
+    const previousTime = this.availableTime;
+    this.availableTime = Math.max(0, this.availableTime - seconds);
+    
+    // Track time deducted
+    await AnalyticsService.trackQuizEvent('time_deducted', {
+      seconds_deducted: seconds,
+      previous_time: previousTime,
+      remaining_time: this.availableTime
+    });
+    
+    if (this.useNativeTimer && BrainBitesTimer) {
+      BrainBitesTimer.updateTime(this.availableTime);
+    }
+    
+    this._notifyListeners('timeUpdate', {
+      remaining: this.availableTime,
+      isTracking: !this.isBrainBitesActive && this.availableTime > 0
+    });
   }
   
   getAvailableTime() {
@@ -250,6 +313,13 @@ class EnhancedTimerService {
     
     if (this.useNativeTimer && BrainBitesTimer) {
       BrainBitesTimer.stopListening();
+    }
+    
+    // Track final session time on cleanup
+    if (this.isTrackingSession) {
+      const sessionDuration = (Date.now() - this.sessionStartTime) / 1000;
+      this.totalSessionTime += sessionDuration;
+      AnalyticsService.trackUserEngagement(this.totalSessionTime / 1000, 0);
     }
   }
 }

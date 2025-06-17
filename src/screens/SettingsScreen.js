@@ -456,6 +456,24 @@ const SettingsScreen = ({ navigation }) => {
               <Icon name="bell-ring-outline" size={22} color="white" />
               <Text style={styles.testButtonText}>Test Notification</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={() => navigation.navigate('AudioTimerTest')}
+            >
+              <Icon name="timer" size={22} color="#FF9F1C" />
+              <Text style={styles.settingText}>Test Audio Timer</Text>
+              <Icon name="chevron-right" size={22} color="#666" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={() => navigation.navigate('AnalyticsTest')}
+            >
+              <Icon name="google-analytics" size={22} color="#FF9F1C" />
+              <Text style={styles.settingText}>Test Analytics</Text>
+              <Icon name="chevron-right" size={22} color="#666" />
+            </TouchableOpacity>
           </View>
         )}
         
@@ -693,6 +711,24 @@ const styles = StyleSheet.create({
     color: '#777',
     marginTop: 4,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+  },
+  debugSection: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  settingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
   },
 });
 

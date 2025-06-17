@@ -1,6 +1,7 @@
 // src/services/EnhancedScoreService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedTimerService from './EnhancedTimerService';
+import AnalyticsService from './AnalyticsService';
 
 // Scoring constants
 const SCORE_BASE = 100;                  // Base score for a correct answer
@@ -346,78 +347,126 @@ class EnhancedScoreService {
     this.questionStartTime = Date.now();
   }
   
-  recordAnswer(isCorrect) {
-    if (!this.isLoaded) {
-      console.warn('Score service not initialized! Call loadSavedData() first.');
-    }
+  async updateScore(points, isCorrect, category) {
+    const previousScore = this.dailyScore;
+    this.dailyScore += points;
+    this.sessionScore += points;
     
-    if (isCorrect) {
-      this.currentStreak++;
-      
-      if (this.currentStreak > this.highestStreak) {
-        this.highestStreak = this.currentStreak;
-      }
-      
-      const streakLevel = Math.floor(this.currentStreak / STREAK_MILESTONE);
-      const isNewMilestone = this.currentStreak % STREAK_MILESTONE === 0 && this.currentStreak > 0;
-      
-      if (isNewMilestone) {
-        this.streakMilestones.push(this.currentStreak);
-      }
-      
-      let earnedPoints = SCORE_BASE;
-      
-      if (streakLevel > 0) {
-        earnedPoints += SCORE_BASE * (streakLevel * STREAK_MULTIPLIER);
-      }
-      
-      const answerTime = (Date.now() - this.questionStartTime) / 1000;
-      const timeBonus = Math.max(0, 1 - (answerTime / 10));
-      earnedPoints += SCORE_BASE * timeBonus * TIME_MULTIPLIER;
-      
-      if (isNewMilestone) {
-        earnedPoints += MILESTONE_BONUS;
-      }
-      
-      earnedPoints = Math.round(earnedPoints);
-      
-      this.sessionScore += earnedPoints;
-      this.dailyScore += earnedPoints;
-      
-      const result = {
-        correct: true,
-        pointsEarned: earnedPoints,
-        currentStreak: this.currentStreak,
-        sessionScore: this.sessionScore,
-        dailyScore: this.dailyScore,
-        isStreakMilestone: isNewMilestone,
-        streakLevel,
-        timeBonus: timeBonus > 0
-      };
-      
-      this._notifyListeners('scoreUpdated', result);
-      this.questionStartTime = 0;
-      this.saveData();
-      
-      return result;
-    } else {
+    // Update session time tracking
+    const currentTime = Date.now();
+    const sessionDuration = (currentTime - this.questionStartTime) / 1000;
+    this.timeSpent += sessionDuration;
+    this.questionStartTime = currentTime;
+    
+    // Check if score is negative and revoke streak if needed
+    if (this.dailyScore < 0) {
       const previousStreak = this.currentStreak;
       this.currentStreak = 0;
+      this.highestStreak = Math.max(0, this.highestStreak - 1);
       
-      const result = {
-        correct: false,
-        pointsEarned: 0,
-        streakBroken: previousStreak > 0,
-        previousStreak,
-        sessionScore: this.sessionScore,
-        dailyScore: this.dailyScore
-      };
-      
-      this._notifyListeners('streakReset', result);
-      this.questionStartTime = 0;
-      
-      return result;
+      // Track streak revocation due to negative score
+      await AnalyticsService.trackQuizEvent('streak_revoked', {
+        reason: 'negative_score',
+        previous_streak: previousStreak,
+        previous_score: previousScore,
+        points_earned: points,
+        new_score: this.dailyScore,
+        session_duration: Math.round(sessionDuration)
+      });
+    } else if (isCorrect) {
+      this.currentStreak++;
+      if (this.currentStreak > this.highestStreak) {
+        this.highestStreak = this.currentStreak;
+        
+        // Track new highest streak
+        await AnalyticsService.trackStreakMilestone(this.highestStreak, category);
+      }
+    } else {
+      this.currentStreak = 0;
     }
+    
+    // Track score update
+    await AnalyticsService.trackQuizEvent('score_updated', {
+      points_earned: points,
+      is_correct: isCorrect,
+      category: category,
+      previous_score: previousScore,
+      new_score: this.dailyScore,
+      session_score: this.sessionScore,
+      streak_revoked: this.dailyScore < 0,
+      session_duration: Math.round(sessionDuration),
+      total_time_spent: Math.round(this.timeSpent)
+    });
+
+    this.saveScoreData();
+    this._notifyListeners('scoreUpdate', {
+      dailyScore: this.dailyScore,
+      sessionScore: this.sessionScore,
+      currentStreak: this.currentStreak,
+      highestStreak: this.highestStreak,
+      timeSpent: this.timeSpent
+    });
+  }
+  
+  async resetDailyScore() {
+    const previousScore = this.dailyScore;
+    this.yesterdayScore = this.dailyScore;
+    this.dailyScore = 0;
+    this.currentStreak = 0;
+    this.sessionScore = 0;
+    
+    // Track daily score reset with session duration
+    await AnalyticsService.trackDailyScore(previousScore, this.questionsAnswered, this.timeSpent);
+    
+    // Reset session tracking
+    this.timeSpent = 0;
+    this.questionStartTime = Date.now();
+    
+    this.saveScoreData();
+    this._notifyListeners('scoreReset', {
+      yesterdayScore: this.yesterdayScore,
+      dailyScore: this.dailyScore,
+      timeSpent: this.timeSpent
+    });
+  }
+  
+  async applyOvertimePenalty(penalty) {
+    const previousScore = this.dailyScore;
+    this.dailyScore = Math.max(0, this.dailyScore - penalty);
+    this.overtimePenalty += penalty;
+    
+    // Check if score went negative and revoke streak if needed
+    if (this.dailyScore < 0) {
+      const previousStreak = this.currentStreak;
+      this.currentStreak = 0;
+      this.highestStreak = Math.max(0, this.highestStreak - 1);
+      
+      // Track streak revocation due to negative score
+      await AnalyticsService.trackQuizEvent('streak_revoked', {
+        reason: 'negative_score',
+        previous_streak: previousStreak,
+        previous_score: previousScore,
+        penalty_amount: penalty,
+        new_score: this.dailyScore
+      });
+    }
+    
+    // Track overtime penalty
+    await AnalyticsService.trackQuizEvent('overtime_penalty', {
+      penalty_amount: penalty,
+      previous_score: previousScore,
+      new_score: this.dailyScore,
+      total_penalties: this.overtimePenalty,
+      streak_revoked: this.dailyScore < 0
+    });
+    
+    this.saveScoreData();
+    this._notifyListeners('scoreUpdate', {
+      dailyScore: this.dailyScore,
+      overtimePenalty: this.overtimePenalty,
+      currentStreak: this.currentStreak,
+      highestStreak: this.highestStreak
+    });
   }
   
   // Get score information
