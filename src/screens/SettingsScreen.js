@@ -440,6 +440,15 @@ const SettingsScreen = ({ navigation }) => {
               <Text style={styles.settingText}>Test Analytics</Text>
               <Icon name="chevron-right" size={22} color="#666" />
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.settingItem}
+              onPress={() => navigation.navigate('Welcome')}
+            >
+              <Icon name="home" size={22} color="#FF9F1C" />
+              <Text style={styles.settingText}>Test Welcome Screen</Text>
+              <Icon name="chevron-right" size={22} color="#666" />
+            </TouchableOpacity>
           </View>
         )}
         

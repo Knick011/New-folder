@@ -1,4 +1,4 @@
-// src/screens/WelcomeScreen.js - Complete updated version with enhanced mascot
+// src/screens/WelcomeScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -31,31 +31,24 @@ const WelcomeScreen = ({ navigation }) => {
   const buttonAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
-  
-  // Implement animation effects similar to web version
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    // Start background music
     SoundService.startMenuMusic();
     
-    // Start entrance animations
     Animated.parallel([
-      // Fade in everything
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
         useNativeDriver: true,
         easing: Easing.out(Easing.cubic),
       }),
-      
-      // Slide in from top
       Animated.timing(slideAnim, {
         toValue: 1,
         duration: 1000,
         useNativeDriver: true,
         easing: Easing.out(Easing.back(1.2)),
       }),
-      
-      // Float animation for logo
       Animated.loop(
         Animated.sequence([
           Animated.timing(logoAnim, {
@@ -72,8 +65,6 @@ const WelcomeScreen = ({ navigation }) => {
           }),
         ])
       ),
-      
-      // Scale in the button
       Animated.sequence([
         Animated.delay(400),
         Animated.spring(buttonAnim, {
@@ -83,8 +74,6 @@ const WelcomeScreen = ({ navigation }) => {
           useNativeDriver: true,
         }),
       ]),
-      
-      // Slide up the info cards
       Animated.sequence([
         Animated.delay(600),
         Animated.spring(cardAnim, {
@@ -102,11 +91,10 @@ const WelcomeScreen = ({ navigation }) => {
     }, 1500);
     
     return () => {
-      // Clean up sound when component unmounts
       SoundService.stopMusic();
     };
   }, []);
-  
+
   // Update mascot based on current page
   useEffect(() => {
     if (currentPage > 0) {
@@ -115,6 +103,15 @@ const WelcomeScreen = ({ navigation }) => {
         updateMascotForPage(currentPage);
       }, 300);
     }
+  }, [currentPage]);
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: currentPage,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // Cannot use native driver for width
+    }).start();
   }, [currentPage]);
   
   const updateMascotForPage = (pageIndex) => {
@@ -147,7 +144,7 @@ const WelcomeScreen = ({ navigation }) => {
     setMascotMessage(message);
     setShowMascot(true);
   };
-  
+
   const pages = [
     {
       title: "Welcome to Brain Bites Mobile!",
@@ -177,25 +174,19 @@ const WelcomeScreen = ({ navigation }) => {
   ];
   
   const handleNext = () => {
-    // Play button sound
     SoundService.playButtonPress();
-    
-    // Hide current mascot
     setShowMascot(false);
     
     if (currentPage < pages.length - 1) {
-      // Animate page transition
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-          easing: Easing.in(Easing.cubic),
-        }),
-      ]).start(() => {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+      }).start(() => {
         setCurrentPage(currentPage + 1);
         
-        // Animate new page in
+        slideAnim.setValue(0);
         Animated.timing(slideAnim, {
           toValue: 1,
           duration: 400,
@@ -210,24 +201,18 @@ const WelcomeScreen = ({ navigation }) => {
   
   const handlePrevious = () => {
     if (currentPage > 0) {
-      // Play button sound
       SoundService.playButtonPress();
-      
-      // Hide current mascot
       setShowMascot(false);
       
-      // Animate page transition
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-          easing: Easing.in(Easing.cubic),
-        }),
-      ]).start(() => {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+      }).start(() => {
         setCurrentPage(currentPage - 1);
         
-        // Animate new page in
+        slideAnim.setValue(0);
         Animated.timing(slideAnim, {
           toValue: 1,
           duration: 400,
@@ -239,44 +224,12 @@ const WelcomeScreen = ({ navigation }) => {
   };
   
   const handleFinish = async () => {
-    // Play success sound
     SoundService.playStreak();
-    
-    // Hide mascot
     setShowMascot(false);
     
-    // Mark onboarding as complete
     await AsyncStorage.setItem('brainbites_onboarding_complete', 'true');
     
-    // Animate out
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      // Navigate to home
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home' }]
-      });
-    });
-  };
-  
-  const handleSkip = () => {
-    // Play button sound
-    SoundService.playButtonPress();
-    
-    // Hide mascot
-    setShowMascot(false);
-    
-    handleFinish();
+    navigation.replace('Home');
   };
   
   const handleMascotDismiss = () => {
@@ -357,9 +310,9 @@ const WelcomeScreen = ({ navigation }) => {
               style={[
                 styles.progressFill,
                 {
-                  width: slideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', `${((currentPage + 1) / pages.length) * 100}%`]
+                  width: progressAnim.interpolate({
+                    inputRange: [0, pages.length - 1],
+                    outputRange: ['25%', '100%']
                   })
                 }
               ]}
@@ -373,27 +326,7 @@ const WelcomeScreen = ({ navigation }) => {
         
         {/* Navigation buttons */}
         <View style={styles.buttonContainer}>
-          <View style={styles.leftButtons}>
-            {currentPage > 0 && (
-              <TouchableOpacity 
-                style={styles.backButton}
-                onPress={handlePrevious}
-              >
-                <Icon name="chevron-left" size={20} color="rgba(255, 255, 255, 0.8)" />
-                <Text style={styles.backText}>Back</Text>
-              </TouchableOpacity>
-            )}
-            
-            {!page.isLast && (
-              <TouchableOpacity 
-                style={styles.skipButton}
-                onPress={handleSkip}
-              >
-                <Text style={styles.skipText}>Skip Tour</Text>
-                <Icon name="chevron-double-right" size={16} color="rgba(255, 255, 255, 0.8)" />
-              </TouchableOpacity>
-            )}
-          </View>
+          <View style={{ flex: 1 }} />
           
           <Animated.View
             style={{
@@ -418,78 +351,6 @@ const WelcomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           </Animated.View>
         </View>
-        
-        {/* Feature highlights */}
-        <Animated.View
-          style={[
-            styles.featuresContainer,
-            {
-              transform: [
-                { translateY: cardAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0]
-                })}
-              ],
-              opacity: cardAnim
-            }
-          ]}
-        >
-          <View style={styles.featuresGrid}>
-            <View style={styles.featureItem}>
-              <Icon name="brain" size={24} color="white" />
-              <Text style={styles.featureTitle}>Learn</Text>
-              <Text style={styles.featureText}>Expand knowledge</Text>
-            </View>
-            
-            <View style={styles.featureItem}>
-              <Icon name="clock-plus-outline" size={24} color="white" />
-              <Text style={styles.featureTitle}>Earn</Text>
-              <Text style={styles.featureText}>Gain app time</Text>
-            </View>
-            
-            <View style={styles.featureItem}>
-              <Icon name="fire" size={24} color="white" />
-              <Text style={styles.featureTitle}>Streak</Text>
-              <Text style={styles.featureText}>Build momentum</Text>
-            </View>
-            
-            <View style={styles.featureItem}>
-              <Icon name="trophy-award" size={24} color="white" />
-              <Text style={styles.featureTitle}>Achieve</Text>
-              <Text style={styles.featureText}>Reach goals</Text>
-            </View>
-          </View>
-        </Animated.View>
-        
-        {/* App benefits */}
-        {currentPage === pages.length - 1 && (
-          <Animated.View
-            style={[
-              styles.benefitsContainer,
-              { opacity: fadeAnim }
-            ]}
-          >
-            <Text style={styles.benefitsTitle}>What you'll gain:</Text>
-            <View style={styles.benefitsList}>
-              <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="white" />
-                <Text style={styles.benefitText}>Improved knowledge & cognitive skills</Text>
-              </View>
-              <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="white" />
-                <Text style={styles.benefitText}>Better screen time management</Text>
-              </View>
-              <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="white" />
-                <Text style={styles.benefitText}>Motivation to learn continuously</Text>
-              </View>
-              <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="white" />
-                <Text style={styles.benefitText}>Guilt-free entertainment time</Text>
-              </View>
-            </View>
-          </Animated.View>
-        )}
       </Animated.View>
       
       {/* Enhanced Mascot */}
@@ -513,18 +374,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
   },
   gradient: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
   gradientInner: {
     position: 'absolute',
     right: 0,
-    top: '30%',
-    width: '70%',
-    height: '40%',
-    borderTopLeftRadius: 300,
-    borderBottomLeftRadius: 300,
+    top: '15%',
+    width: '120%',
+    height: '60%',
+    borderTopLeftRadius: 500,
+    borderBottomLeftRadius: 500,
     opacity: 0.4,
   },
   container: {
@@ -546,17 +405,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 32,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 12,
   },
   title: {
     fontSize: 28,
@@ -613,37 +466,9 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginBottom: 20,
-  },
-  leftButtons: {
-    flex: 1,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  backText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
-    marginLeft: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
-  },
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  skipText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
-    marginRight: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
   nextButton: {
     paddingVertical: 14,
@@ -651,17 +476,11 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   nextText: {
     color: 'white',
@@ -669,65 +488,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  featuresContainer: {
-    marginBottom: 20,
-    width: '100%',
-  },
-  featuresGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  featureItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-    width: '22%',
-    aspectRatio: 1,
-  },
-  featureTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: 'white',
-    marginTop: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  featureText: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-  },
-  benefitsContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  benefitsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 12,
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  benefitsList: {
-    space: 8,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  benefitText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginLeft: 8,
-    flex: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
 });
 
