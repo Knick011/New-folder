@@ -121,27 +121,31 @@ const WelcomeScreen = ({ navigation }) => {
     switch(pageIndex) {
       case 0:
         type = 'excited';
-        message = 'Welcome to Brain Bites! 🧠✨\n\nI\'m your learning companion!\nI\'ll help you earn app time by getting smarter!\n\nReady to start this amazing journey? 🚀';
+        message = 'Hey there, future genius! 🌟\n\nI\'m CaBBy, your Brain Bites buddy, and I\'m SO excited to help you on this journey!\n\nTogether, we\'ll make learning fun and rewarding! 🎉';
         break;
       case 1:
         type = 'happy';
-        message = 'Here\'s how it works! 📚\n\nAnswer questions correctly to earn app time!\nEach right answer = 30 seconds ⏰\n\nBuild a streak for bonus time! 🔥\nEvery 5 correct = 2 minute bonus! 🎉';
+        message = 'Here\'s how the magic works! ✨\n\n🎯 Right answer = 30 seconds of app time\n🔥 5-question streak = 2 bonus minutes\n📈 Keep learning = keep earning!\n\nIt\'s like leveling up in real life! 🎮';
         break;
       case 2:
         type = 'gamemode';
-        message = 'Time to have fun! 🎮📱\n\nUse your earned time on:\n• Social media apps\n• Games and videos\n• Any entertainment app!\n\nWhen time runs out, just earn more! 😊';
+        message = 'Time to enjoy yourself! 🎊\n\nYour earned time is YOURS to use however you want:\n\n📱 Social apps\n🎮 Gaming\n📺 Videos\n\nYou earned it, you enjoy it! 😊';
         break;
       case 3:
-        type = 'excited';
-        message = 'You\'re all set! 🌟\n\nThis journey will make you:\n• Smarter 🧠\n• More knowledgeable 📖\n• Better at managing screen time ⚖️\n\nLet\'s begin your adventure! 🚀';
+        type = 'thoughtful';
+        message = 'Quick heads up! ⚠️\n\nWhen your earned time runs out, you\'ll start losing points if you keep using apps.\n\nBut hey - just answer a few questions and CaBBy will help you bounce right back! No stress! 😌';
         break;
       case 4:
-        type = 'learn-from-mistakes';
-        message = 'Wrong answers temporarily reduce your score, but don\'t worry! Keep playing to recover quickly. Every mistake is a chance to learn and grow stronger!';
+        type = 'encouraging';
+        message = 'Mistakes are your friends! 🤝\n\nWrong answers won\'t hurt your score - they just reset your streak. Think of them as:\n\n🧠 Learning opportunities\n💪 Chances to grow\n🎯 Steps toward mastery\n\nCaBBy believes every expert was once a beginner! ✨';
+        break;
+      case 5:
+        type = 'excited';
+        message = 'You\'re absolutely ready! 🚀\n\nRemember, this is YOUR journey. Learn at your pace, earn your time, and most importantly - have fun with it!\n\nCaBBy believes in you! Let\'s do this! 💪✨';
         break;
       default:
         type = 'excited';
-        message = 'Welcome to Brain Bites Mobile! Let\'s learn together! 🎓';
+        message = 'Welcome to Brain Bites! CaBBy is here to learn and grow with you! 🎓';
     }
     
     setMascotType(type);
@@ -152,31 +156,37 @@ const WelcomeScreen = ({ navigation }) => {
   const pages = [
     {
       title: "Welcome to Brain Bites!",
-      text: "Transform your screen time into learning time. The more you learn, the more time you earn for your favorite apps!",
+      text: "Hey there! Ready to turn learning into your superpower? With Brain Bites, every answer you get right earns you more time to enjoy your favorite apps!",
       icon: "brain",
       gradient: ['#FF9F1C', '#FFD699'],
     },
     {
-      title: "Learn & Earn",
-      text: "Each correct quiz answer adds to your screen time. Build up a streak for awesome bonus rewards!",
+      title: "Learn & Earn Time",
+      text: "Here's the fun part - each correct answer gives you 30 seconds of app time! Get on a streak and earn bonus minutes. The smarter you get, the more freedom you have!",
       icon: "head-question",
       gradient: ['#FF6B6B', '#FFB8B8'],
     },
     {
-      title: "Use Your Time Wisely",
-      text: "Enjoy your earned time on any app you like! But be careful... if time runs out, your score will start to drop.",
-      icon: "shield-alert-outline",
+      title: "Your Time, Your Choice",
+      text: "Use your earned time on any app you love - social media, games, videos, whatever makes you happy! It's all about balance and making your screen time meaningful.",
+      icon: "heart-outline",
       gradient: ['#4ECDC4', '#A8E6CF'],
     },
     {
-      title: "Learn from Mistakes",
-      text: "Wrong answers temporarily reduce your score, but don't worry! Keep playing to recover quickly. Every mistake is a chance to learn and grow stronger!",
+      title: "Stay in the Green Zone",
+      text: "Here's the thing - when your earned time runs out, you'll start losing points for continued screen time. But don't stress! Just hop back in and earn more time whenever you need it.",
+      icon: "shield-alert-outline",
+      gradient: ['#FFA726', '#FFCC80'],
+    },
+    {
+      title: "Learn from Every Moment",
+      text: "Wrong answers? No problem! They won't hurt your score - they just reset your streak. Every mistake is actually a chance to learn something new and come back stronger!",
       icon: "lightbulb-on-outline",
       gradient: ['#667eea', '#764ba2'],
     },
     {
-      title: "Ready to Start?",
-      text: "Let's begin your journey to becoming smarter while managing your screen time like a pro. You've got this!",
+      title: "Ready to Get Started?",
+      text: "You're all set to begin your journey! Remember - this isn't about restriction, it's about growing smarter while enjoying your digital life. Let's make every moment count!",
       icon: "rocket-launch",
       gradient: ['#A8E6CF', '#7FCDCD'],
       isLast: true

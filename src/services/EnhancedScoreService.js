@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedTimerService from './EnhancedTimerService';
 import AnalyticsService from './AnalyticsService';
+import NotificationService from './NotificationService';
 
 // Scoring constants
 const SCORE_BASE = 100;                  // Base score for a correct answer
@@ -303,34 +304,67 @@ class EnhancedScoreService {
     const availableTime = EnhancedTimerService.getAvailableTime();
     const trackingStatus = EnhancedTimerService.getTrackingStatus();
     
-    if (availableTime <= 0 && !trackingStatus.isBrainBitesActive && this.lastPenaltyCheck) {
+    // Only apply penalties when time is expired AND user is actively using other apps
+    if (availableTime <= 0 && !trackingStatus.isBrainBitesActive) {
+      
+      // Show warning if this is the first time going into overtime
+      if (!this.lastPenaltyCheck) {
+        this.showTimeExpiredWarning();
+        this.lastPenaltyCheck = Date.now();
+        return; // Give 30-second grace period
+      }
+      
       const now = Date.now();
       const overtimeSeconds = Math.floor((now - this.lastPenaltyCheck) / 1000);
-      const overtimeMinutes = overtimeSeconds / 60;
       
-      const penalty = Math.floor(overtimeMinutes * OVERTIME_PENALTY_PER_MINUTE);
-      
-      if (penalty > 0) {
-        // Apply penalty to daily score (can go negative!)
-        this.dailyScore = Math.max(-9999, this.dailyScore - penalty);
-        this.overtimePenalty += penalty;
+      // Apply penalty after 30-second grace period
+      if (overtimeSeconds >= 30) {
+        const overtimeMinutes = overtimeSeconds / 60;
+        const penalty = Math.floor(overtimeMinutes * OVERTIME_PENALTY_PER_MINUTE);
         
-        console.log(`Applied overtime penalty: -${penalty} points (${overtimeMinutes.toFixed(1)} minutes overtime)`);
-        
-        this.lastPenaltyCheck = now;
-        await this.saveData();
-        
-        this._notifyListeners('penaltyApplied', {
-          penalty,
-          totalPenalty: this.overtimePenalty
-        });
-        
-        // Show a mascot warning on every 50-point penalty milestone
-        if (this.overtimePenalty % 50 === 0) {
-          this.showPenaltyWarning(this.overtimePenalty);
+        if (penalty > 0) {
+          const oldPenaltyTotal = this.overtimePenalty;
+          
+          // THIS IS THE ONLY PLACE SCORES CAN GO NEGATIVE
+          this.dailyScore = Math.max(-9999, this.dailyScore - penalty);
+          this.overtimePenalty += penalty;
+          
+          console.log(`Applied overtime penalty: -${penalty} points (${overtimeMinutes.toFixed(1)} minutes overtime). Total penalty: ${this.overtimePenalty}`);
+          
+          // Show push notification for penalty every ~100 points
+          if (Math.floor(oldPenaltyTotal / 100) < Math.floor(this.overtimePenalty / 100)) {
+            NotificationService.showOvertimePenaltyNotification(this.overtimePenalty);
+          }
+          
+          this.lastPenaltyCheck = now;
+          await this.saveData();
+          
+          this._notifyListeners('penaltyApplied', {
+            penalty,
+            overtimeMinutes: Math.floor(overtimeMinutes),
+            dailyScore: this.dailyScore,
+            totalPenalty: this.overtimePenalty
+          });
+          
+          // Show periodic in-app warnings
+          if (this.overtimePenalty > 0 && this.overtimePenalty % 100 < penalty) {
+            this.showPenaltyWarning(this.overtimePenalty);
+          }
         }
       }
+    } else if (availableTime > 0) {
+      // Reset penalty tracking when user has time again
+      this.lastPenaltyCheck = null;
     }
+  }
+  
+  showTimeExpiredWarning() {
+    this._notifyListeners('showMessage', {
+      type: 'timeExpiredWarning',
+      message: `⏰ Time's Up!\n\nYour earned screen time has run out. You'll now start losing points for continued app usage.\n\n💡 Quick solution: Answer a few quiz questions to earn more time and stop the penalty!\n\nCurrent score: ${this.dailyScore}`,
+      priority: 'high',
+      duration: 8000
+    });
   }
   
   showPenaltyWarning(totalPenalty) {
@@ -366,7 +400,7 @@ class EnhancedScoreService {
         isMilestone: this.currentStreak > 0 && this.currentStreak % STREAK_MILESTONE === 0,
       };
     } else {
-      // Incorrect answer
+      // Incorrect answer - NO POINTS DEDUCTED, just reset streak
       this.updateScore(0, false, category);
       return {
         pointsEarned: 0,
@@ -379,31 +413,21 @@ class EnhancedScoreService {
   
   async updateScore(points, isCorrect, category) {
     const previousScore = this.dailyScore;
-    this.dailyScore += points;
-    this.sessionScore += points;
+    
+    // Only add points for correct answers, never subtract for wrong answers
+    if (points > 0) {
+      this.dailyScore += points;
+      this.sessionScore += points;
+    }
     
     // Update session time tracking
     const currentTime = Date.now();
     const sessionDuration = (currentTime - this.questionStartTime) / 1000;
     this.timeSpent += sessionDuration;
     this.questionStartTime = currentTime;
-    
-    // Check if score is negative and revoke streak if needed
-    if (this.dailyScore < 0) {
-      const previousStreak = this.currentStreak;
-      this.currentStreak = 0;
-      this.highestStreak = Math.max(0, this.highestStreak - 1);
-      
-      // Track streak revocation due to negative score
-      await AnalyticsService.trackQuizEvent('streak_revoked', {
-        reason: 'negative_score',
-        previous_streak: previousStreak,
-        previous_score: previousScore,
-        points_earned: points,
-        new_score: this.dailyScore,
-        session_duration: Math.round(sessionDuration)
-      });
-    } else if (isCorrect) {
+  
+    // Handle streaks - only negative scores from OVERTIME should reset streaks
+    if (isCorrect) {
       this.currentStreak++;
       if (this.currentStreak > this.highestStreak) {
         this.highestStreak = this.currentStreak;
@@ -412,6 +436,7 @@ class EnhancedScoreService {
         await AnalyticsService.trackStreakMilestone(this.highestStreak, category);
       }
     } else {
+      // Wrong answer resets streak but doesn't affect score
       this.currentStreak = 0;
     }
     
@@ -423,11 +448,10 @@ class EnhancedScoreService {
       previous_score: previousScore,
       new_score: this.dailyScore,
       session_score: this.sessionScore,
-      streak_revoked: this.dailyScore < 0,
       session_duration: Math.round(sessionDuration),
       total_time_spent: Math.round(this.timeSpent)
     });
-
+  
     this.saveScoreData();
     this._notifyListeners('scoreUpdate', {
       dailyScore: this.dailyScore,

@@ -4,6 +4,9 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -258,29 +261,40 @@ class BrainBitesTimerService : Service() {
     private fun handleTimeExpired() {
         Log.d(TAG, "Time expired!")
         
-        // Show high priority notification
+        // Show high priority notification with themed colors and cropped CaBBy
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("⏰ Screen Time Expired!")
-            .setContentText("Complete quizzes in BrainBites to earn more time!")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("\uD83C\uDFAF CaBBy Needs You!")
+            .setContentText("Your earned time is up! Come challenge your brain to unlock more! \uD83C\uDF1F")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
+            .setColor(0xFFFF9F1C.toInt()) // Theme primary orange
+            .setLights(0xFFFF9F1C.toInt(), 1000, 1000) // Orange notification light
+            .setStyle(NotificationCompat.BigPictureStyle()
+                .bigPicture(getCroppedMascotBitmap(R.drawable.cabby_sad_large))
+                .setBigContentTitle("\uD83C\uDFAF CaBBy Needs You!")
+                .setSummaryText("Tap to start earning time!"))
             .build()
             
         notificationManager.notify(999, notification)
-        
         broadcastUpdate()
     }
     
     private fun showLowTimeNotification(minutes: Int) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("⏰ Low Screen Time Warning")
-            .setContentText("Only $minutes minute${if (minutes > 1) "s" else ""} remaining!")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("\u23F1\uFE0F CaBBy Says: Time Check!")
+            .setContentText("Whoa! Only $minutes minute${if (minutes > 1) "s" else ""} left! Time to power up! \uD83E\uDDE0\u2728")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
+            .setColor(0xFFFF9F1C.toInt()) // Theme primary orange
+            .setLights(0xFFFF9F1C.toInt(), 1000, 1000) // Orange notification light
+            .setStyle(NotificationCompat.BigPictureStyle()
+                .bigPicture(getCroppedMascotBitmap(R.drawable.cabby_excited_large))
+                .setBigContentTitle("\u23F1\uFE0F CaBBy Says: Time Check!")
+                .setSummaryText("Quick quiz session?"))
             .build()
             
         notificationManager.notify(1000 + minutes, notification)
@@ -373,6 +387,28 @@ class BrainBitesTimerService : Service() {
         return when {
             hours > 0 -> String.format("%d:%02d:%02d", hours, minutes, secs)
             else -> String.format("%d:%02d", minutes, secs)
+        }
+    }
+    
+    // Helper function to crop mascot images to show top 70% (instead of 80%)
+    private fun getCroppedMascotBitmap(resourceId: Int): Bitmap? {
+        return try {
+            val originalBitmap = BitmapFactory.decodeResource(resources, resourceId)
+            if (originalBitmap != null) {
+                val cropHeight = (originalBitmap.height * 0.7).toInt() // Changed from 0.8 to 0.7
+                Bitmap.createBitmap(
+                    originalBitmap,
+                    0, // x
+                    0, // y (start from top)
+                    originalBitmap.width, // width (full width)
+                    cropHeight // height (70% of original)
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cropping mascot image: ${e.message}")
+            null
         }
     }
 }

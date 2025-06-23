@@ -123,46 +123,38 @@ class NotificationService {
       return;
     }
     
-    // Convert seconds to milliseconds for date calculation
     const fireDate = new Date(Date.now() + (timeUntilInSeconds * 1000));
-    
-    // Generate unique ID for this notification
     const notificationId = `time-warning-${minutes}`;
     
     console.log(`Scheduling ${minutes} minute warning for:`, fireDate.toLocaleTimeString());
     
-    // Schedule the local notification
     PushNotification.localNotificationSchedule({
-      // Android specific
       channelId: 'brainbites-local',
-      
-      // Notification content
       title: `⏱️ CaBBy Says: Time Check!`,
       message: `Whoa! Only ${minutes} minute${minutes !== 1 ? 's' : ''} left! Time to power up with more quizzes! 🧠✨`,
-      
-      // When to fire
       date: fireDate,
-      
-      // Notification settings
       playSound: true,
       soundName: 'default',
       vibrate: true,
       importance: 'high',
       priority: 'high',
-      
-      // Custom data
       userInfo: {
         id: notificationId,
         type: 'time-warning',
         minutesRemaining: minutes
       },
-      
-      // Auto cancel when tapped
       autoCancel: true,
       
-      // Large icon for Android
-      largeIcon: 'cabby_notification',
+      // Theme color integration
+      color: '#FF9F1C', // Primary orange theme color
       smallIcon: 'ic_notification',
+      
+      // Enhanced styling with theme colors
+      style: 'bigPicture',
+      picture: 'cabby_excited_large_cropped',
+      lights: true,
+      lightColor: '#FF9F1C',
+      vibrationPattern: [100, 50, 100],
     });
     
     console.log(`✓ Scheduled ${minutes} minute notification (ID: ${notificationId})`);
@@ -177,40 +169,78 @@ class NotificationService {
     
     console.log('Showing time expired notification');
     
-    // Show immediate local notification
     PushNotification.localNotification({
-      // Android specific
       channelId: 'brainbites-local',
-      
-      // Notification content
       title: '🎯 CaBBy Needs You!',
-      message: 'Your screen time is up! Come back and feed your brain with fun quizzes to unlock more time! 🌟',
-      
-      // Notification settings
+      message: 'Your earned time is up! Come back and challenge your brain to unlock more screen time! 🌟',
       playSound: true,
       soundName: 'default',
       vibrate: true,
       importance: 'high',
       priority: 'high',
-      
-      // Custom data
       userInfo: {
         type: 'time-expired'
       },
-      
-      // Auto cancel when tapped
       autoCancel: true,
       
-      // Large icon for Android
-      largeIcon: 'cabby_notification',
+      // Theme color integration
+      color: '#FF9F1C', // Primary orange theme color
       smallIcon: 'ic_notification',
+      
+      // Enhanced styling with theme colors
+      style: 'bigPicture',
+      picture: 'cabby_sad_large_cropped',
+      lights: true,
+      lightColor: '#FF9F1C',
+      vibrationPattern: [200, 100, 200, 100, 200],
     });
     
-    // Update last notification time
     this.lastNotificationDate = new Date();
     this.saveSettings();
     
     console.log('✓ Time expired notification sent');
+  }
+  
+  // Show notification when user starts losing points
+  showOvertimePenaltyNotification(pointsLost) {
+    if (!this.notificationsEnabled || !this.isInitialized) {
+      console.log('Penalty notification disabled or not initialized');
+      return;
+    }
+    
+    console.log('Showing overtime penalty notification');
+    
+    PushNotification.localNotification({
+      channelId: 'brainbites-local',
+      title: '⚠️ CaBBy is Worried!',
+      message: `Oh no! You've lost ${pointsLost} points from overtime. Quick - answer some quizzes to stop the penalty! 💪`,
+      playSound: true,
+      soundName: 'default',
+      vibrate: true,
+      importance: 'high',
+      priority: 'high',
+      userInfo: {
+        type: 'penalty-warning',
+        pointsLost: pointsLost
+      },
+      autoCancel: true,
+      
+      // Theme color with warning tint
+      color: '#FFCC00', // Warning yellow from theme
+      smallIcon: 'ic_notification',
+      
+      // Enhanced styling with warning colors
+      style: 'bigPicture',
+      picture: 'cabby_depressed_large_cropped',
+      lights: true,
+      lightColor: '#FFCC00',
+      vibrationPattern: [100, 100, 100, 100, 100],
+    });
+    
+    this.lastNotificationDate = new Date();
+    this.saveSettings();
+    
+    console.log('✓ Penalty notification sent');
   }
   
   // Schedule a reminder to earn more time
@@ -220,7 +250,6 @@ class NotificationService {
       return;
     }
     
-    // Only schedule if we haven't sent a notification in the last 4 hours
     if (this.lastNotificationDate) {
       const hoursSinceLastNotification = 
         (Date.now() - new Date(this.lastNotificationDate).getTime()) / (1000 * 60 * 60);
@@ -235,7 +264,6 @@ class NotificationService {
     
     console.log(`Scheduling earn time reminder for:`, fireDate.toLocaleTimeString());
     
-    // Schedule the reminder
     PushNotification.localNotificationSchedule({
       channelId: 'brainbites-local',
       title: "🎮 CaBBy's Power-Up Time!",
@@ -248,8 +276,17 @@ class NotificationService {
         type: 'earn-reminder'
       },
       autoCancel: true,
-      largeIcon: 'cabby_notification',
+      
+      // Theme color integration
+      color: '#FF9F1C', // Primary orange theme color
       smallIcon: 'ic_notification',
+      
+      // Enhanced styling with theme colors
+      style: 'bigPicture',
+      picture: 'cabby_happy_large_cropped',
+      lights: true,
+      lightColor: '#FF9F1C',
+      vibrationPattern: [150, 75, 150],
     });
     
     console.log(`✓ Scheduled earn time reminder in ${hoursFromNow} hours`);
@@ -262,7 +299,6 @@ class NotificationService {
       return;
     }
     
-    // Only schedule if we haven't sent a notification today
     if (this.lastNotificationDate) {
       const today = new Date().toDateString();
       const lastDate = new Date(this.lastNotificationDate).toDateString();
@@ -273,19 +309,16 @@ class NotificationService {
       }
     }
     
-    // Schedule for 7 PM if it's before that, or tomorrow at 7 PM
     const now = new Date();
     const reminderTime = new Date();
     reminderTime.setHours(19, 0, 0, 0); // 7 PM
     
     if (now > reminderTime) {
-      // Set for tomorrow
       reminderTime.setDate(reminderTime.getDate() + 1);
     }
     
     console.log(`Scheduling streak reminder for:`, reminderTime.toLocaleString());
     
-    // Schedule the notification
     PushNotification.localNotificationSchedule({
       channelId: 'brainbites-local',
       title: "🔥 CaBBy's Streak Alert!",
@@ -298,8 +331,17 @@ class NotificationService {
         type: 'streak-reminder'
       },
       autoCancel: true,
-      largeIcon: 'cabby_notification',
+      
+      // Theme color with success tint
+      color: '#4CD964', // Success green from theme
       smallIcon: 'ic_notification',
+      
+      // Enhanced styling with success colors
+      style: 'bigPicture',
+      picture: 'cabby_gamemode_large_cropped',
+      lights: true,
+      lightColor: '#4CD964',
+      vibrationPattern: [100, 50, 100, 50, 100],
     });
     
     console.log(`✓ Scheduled streak reminder`);
@@ -326,14 +368,101 @@ class NotificationService {
         milestone: milestone
       },
       autoCancel: true,
-      largeIcon: 'cabby_notification',
+      
+      // Theme color with celebration tint
+      color: '#5D9CEC', // Accent blue from theme
       smallIcon: 'ic_notification',
+      
+      // Enhanced styling with celebration colors
+      style: 'bigPicture',
+      picture: 'cabby_excited_large_cropped',
+      lights: true,
+      lightColor: '#5D9CEC',
+      vibrationPattern: [100, 100, 100, 100, 200],
     });
     
     this.lastNotificationDate = new Date();
     this.saveSettings();
     
     console.log('✓ Milestone notification sent');
+  }
+  
+  // Show encouragement when user gets wrong answers
+  showEncouragementNotification() {
+    if (!this.notificationsEnabled || !this.isInitialized) {
+      console.log('Encouragement notification disabled or not initialized');
+      return;
+    }
+    
+    console.log('Showing encouragement notification');
+    
+    PushNotification.localNotification({
+      channelId: 'brainbites-local',
+      title: '💪 CaBBy Believes in You!',
+      message: "Wrong answers don't hurt your score - they're just stepping stones to greatness! Keep going! ✨",
+      playSound: true,
+      soundName: 'default',
+      vibrate: true,
+      userInfo: {
+        type: 'encouragement'
+      },
+      autoCancel: true,
+      
+      // Theme color integration
+      color: '#FF9F1C', // Primary orange theme color
+      smallIcon: 'ic_notification',
+      
+      // Enhanced styling with theme colors
+      style: 'bigPicture',
+      picture: 'cabby_happy_large_cropped',
+      lights: true,
+      lightColor: '#FF9F1C',
+      vibrationPattern: [150, 75, 150],
+    });
+    
+    this.lastNotificationDate = new Date();
+    this.saveSettings();
+    
+    console.log('✓ Encouragement notification sent');
+  }
+  
+  // Show daily welcome back notification
+  showDailyWelcomeNotification() {
+    if (!this.notificationsEnabled || !this.isInitialized) {
+      console.log('Daily welcome notification disabled or not initialized');
+      return;
+    }
+    
+    console.log('Showing daily welcome notification');
+    
+    PushNotification.localNotification({
+      channelId: 'brainbites-local',
+      title: '🌅 Good Morning from CaBBy!',
+      message: "Ready for another amazing day of learning? Let's earn some app time and make your brain stronger! ☀️",
+      playSound: true,
+      soundName: 'default',
+      vibrate: true,
+      userInfo: {
+        type: 'daily-welcome'
+      },
+      autoCancel: true,
+      
+      // Theme color integration
+      color: '#FFB347', // Secondary orange from theme
+      smallIcon: 'ic_notification',
+      
+      // Enhanced styling with theme colors
+      style: 'bigPicture',
+      picture: 'cabby_excited_large_cropped',
+      lights: true,
+      lightColor: '#FFB347',
+      vibrationPattern: [100, 50, 100],
+    });
+    
+    this.lastNotificationDate = new Date();
+    this.saveSettings();
+    
+    console.log('✓ Daily welcome notification sent');
   }
   
   // Cancel specific time-related notifications

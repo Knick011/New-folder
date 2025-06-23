@@ -81,9 +81,9 @@
 
       <!-- Push Notification Configuration -->
       <meta-data  android:name="com.dieam.reactnativepushnotification.notification_channel_name"
-                  android:value="BrainBites"/>
+                  android:value="CaBBy's Messages"/>
       <meta-data  android:name="com.dieam.reactnativepushnotification.notification_channel_description"
-                  android:value="BrainBites Local Notifications"/>
+                  android:value="Fun reminders from CaBBy to keep your brain growing!"/>
       <meta-data  android:name="com.dieam.reactnativepushnotification.notification_color"
                   android:resource="@android:color/white"/>
     </application>
