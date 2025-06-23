@@ -48,6 +48,10 @@ const HomeScreen = () => {
     allTimeHighScore: 0
   });
   const [showIntro, setShowIntro] = useState(false);
+  const [rewardSettings, setRewardSettings] = useState({
+    normalReward: 30,
+    milestoneReward: 120
+  });
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -72,12 +76,28 @@ const HomeScreen = () => {
         const settings = await QuizService.getRewardSettings();
         setRewardSettings(settings);
 
+        // Load daily streak data
+        await loadDailyStreakData();
+
         if (isInitializing) {
           setIsInitializing(false);
         }
       };
       
       loadData(); // Load data initially on focus
+      
+      // Check if user just returned from quiz and update streak if needed
+      const checkQuizCompletion = async () => {
+        const scoreInfo = EnhancedScoreService.getScoreInfo();
+        // If user has a daily score > 0 and hasn't played today, they just completed a quiz
+        if (scoreInfo.dailyScore > 0 && !hasPlayedToday) {
+          console.log('User returned from quiz with score, updating streak');
+          await updateDailyStreak();
+        }
+      };
+      
+      // Check for quiz completion after a short delay to ensure data is loaded
+      setTimeout(checkQuizCompletion, 500);
       
       // Set up listeners for real-time updates
       const scoreListener = EnhancedScoreService.addEventListener((event) => {
@@ -99,8 +119,43 @@ const HomeScreen = () => {
         scoreListener();
         timerListener();
       };
-    }, [isInitializing]) // Rerun if isInitializing changes
+    }, [isInitializing, hasPlayedToday]) // Rerun if isInitializing or hasPlayedToday changes
   );
+
+  // Load daily streak data from AsyncStorage
+  const loadDailyStreakData = async () => {
+    try {
+      const streakDataString = await AsyncStorage.getItem('brainbites_daily_streak');
+      if (streakDataString) {
+        const streakData = JSON.parse(streakDataString);
+        const today = new Date().toDateString();
+        const lastPlayedDate = new Date(streakData.lastPlayedDate).toDateString();
+        
+        // Check if user has played today
+        const playedToday = today === lastPlayedDate;
+        setHasPlayedToday(playedToday);
+        
+        // Set the streak count
+        setDailyStreak(streakData.streak || 0);
+        
+        console.log('Loaded streak data:', { 
+          streak: streakData.streak, 
+          lastPlayedDate: streakData.lastPlayedDate,
+          playedToday,
+          today
+        });
+      } else {
+        // First time user, initialize streak data
+        setDailyStreak(0);
+        setHasPlayedToday(false);
+        console.log('No streak data found, initializing new user');
+      }
+    } catch (error) {
+      console.error('Error loading streak data:', error);
+      setDailyStreak(0);
+      setHasPlayedToday(false);
+    }
+  };
 
   // This effect handles the initial onboarding check
   useEffect(() => {
@@ -181,21 +236,28 @@ const HomeScreen = () => {
   
   const updateDailyStreak = async () => {
     const today = new Date().toDateString();
-    const streakData = {
-      streak: hasPlayedToday ? dailyStreak : dailyStreak + 1,
-      lastPlayedDate: today
-    };
     
-    await AsyncStorage.setItem('brainbites_daily_streak', JSON.stringify(streakData));
-    
+    // Only update streak if user hasn't played today
     if (!hasPlayedToday) {
-      setDailyStreak(dailyStreak + 1);
+      const newStreak = dailyStreak + 1;
+      const streakData = {
+        streak: newStreak,
+        lastPlayedDate: today
+      };
+      
+      await AsyncStorage.setItem('brainbites_daily_streak', JSON.stringify(streakData));
+      
+      setDailyStreak(newStreak);
       setHasPlayedToday(true);
+      
+      console.log('Updated streak:', { newStreak, today });
       
       // Show streak celebration
       if (mascotEnabled) {
-        showStreakCelebration(dailyStreak + 1);
+        showStreakCelebration(newStreak);
       }
+    } else {
+      console.log('User already played today, streak not updated');
     }
   };
   
@@ -337,11 +399,6 @@ const HomeScreen = () => {
     // Play button press sound
     SoundService.playButtonPress();
     
-    // Update daily streak if first play today
-    if (!hasPlayedToday) {
-      await updateDailyStreak();
-    }
-    
     // Hide mascot
     setShowMascot(false);
     
@@ -366,19 +423,31 @@ const HomeScreen = () => {
     setShowMascot(false);
   };
   
-  const handleDailyReset = (resetData) => {
+  const handleDailyReset = async (resetData) => {
     // Play celebration sound
     SoundService.playStreak();
     
     // Update daily streak if they played yesterday
+    let newStreak = dailyStreak;
     if (resetData.yesterdayScore > 0) {
-      setDailyStreak(dailyStreak + 1);
+      newStreak = dailyStreak + 1;
     } else {
-      setDailyStreak(0);
+      newStreak = 0;
     }
     
-    // Reset "played today" flag
+    // Update streak in AsyncStorage
+    const today = new Date().toDateString();
+    const streakData = {
+      streak: newStreak,
+      lastPlayedDate: today
+    };
+    
+    await AsyncStorage.setItem('brainbites_daily_streak', JSON.stringify(streakData));
+    
+    setDailyStreak(newStreak);
     setHasPlayedToday(false);
+    
+    console.log('Daily reset - updated streak:', { newStreak, today });
   };
   
   const handlePeekingMascotPress = () => {
@@ -573,10 +642,7 @@ const HomeScreen = () => {
             </View>
             
             <Text style={styles.streakMessage}>
-              {!hasPlayedToday ? 
-                "Play today to continue your streak!" : 
-                "Great job! Come back tomorrow!"
-              }
+              Play today to continue your streak!
             </Text>
           </TouchableOpacity>
           
@@ -645,34 +711,6 @@ const HomeScreen = () => {
               </Animated.View>
             ))}
           </View>
-          
-          {/* Quick stats section */}
-          <Animated.View 
-            style={[
-              styles.quickStatsContainer,
-              { opacity: fadeAnim }
-            ]}
-          >
-            <Text style={styles.quickStatsTitle}>How to Earn</Text>
-            <View style={styles.quickStatsGrid}>
-              <View style={styles.quickStatItem}>
-                <Icon name="check-circle" size={20} color="#4CAF50" />
-                <Text style={styles.quickStatText}>Correct answer = 30s</Text>
-              </View>
-              <View style={styles.quickStatItem}>
-                <Icon name="fire" size={20} color="#FF9F1C" />
-                <Text style={styles.quickStatText}>5 streak = 2min bonus</Text>
-              </View>
-              <View style={styles.quickStatItem}>
-                <Icon name="calendar-check" size={20} color="#2196F3" />
-                <Text style={styles.quickStatText}>Daily play = streak</Text>
-              </View>
-              <View style={styles.quickStatItem}>
-                <Icon name="brain" size={20} color="#9C27B0" />
-                <Text style={styles.quickStatText}>Learning = smarter</Text>
-              </View>
-            </View>
-          </Animated.View>
           
           <View style={styles.footer} />
         </ScrollView>
@@ -894,39 +932,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-  },
-  quickStatsContainer: {
-    backgroundColor: 'white',
-    borderRadius: theme.borderRadius.lg,
-    padding: 20,
-    ...theme.shadows.sm,
-    marginBottom: 16,
-  },
-  quickStatsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.textDark,
-    marginBottom: 16,
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  quickStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  quickStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '48%',
-    marginBottom: 12,
-  },
-  quickStatText: {
-    fontSize: 12,
-    color: theme.colors.textDark,
-    marginLeft: 8,
-    flex: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
   footer: {
     height: 100, // Extra space at bottom to avoid mascot overlap

@@ -10,7 +10,9 @@ import {
   SafeAreaView, 
   Alert,
   StatusBar,
-  Platform 
+  Platform,
+  Modal,
+  TouchableWithoutFeedback
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +30,10 @@ const SettingsScreen = ({ navigation }) => {
   const [highestStreak, setHighestStreak] = useState(0);
   const [scoreInfo, setScoreInfo] = useState(null);
   const [appVersion, setAppVersion] = useState("1.0.0");
+  
+  // Popup selector states
+  const [showNormalRewardSelector, setShowNormalRewardSelector] = useState(false);
+  const [showMilestoneRewardSelector, setShowMilestoneRewardSelector] = useState(false);
   
   useEffect(() => {
     loadSettings();
@@ -244,35 +250,15 @@ const SettingsScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <View style={styles.rewardSelector}>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  normalReward === 15 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('normal', 15)}
-              >
-                <Text style={normalReward === 15 ? styles.selectedRewardText : styles.rewardText}>15s</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  normalReward === 30 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('normal', 30)}
-              >
-                <Text style={normalReward === 30 ? styles.selectedRewardText : styles.rewardText}>30s</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  normalReward === 60 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('normal', 60)}
-              >
-                <Text style={normalReward === 60 ? styles.selectedRewardText : styles.rewardText}>1m</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={styles.selectorButton}
+              onPress={() => setShowNormalRewardSelector(true)}
+            >
+              <Text style={styles.selectorButtonText}>
+                {normalReward < 60 ? `${normalReward}s` : `${normalReward / 60}m`}
+              </Text>
+              <Icon name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
           
           <View style={styles.settingItem}>
@@ -285,35 +271,15 @@ const SettingsScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
-            <View style={styles.rewardSelector}>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  milestoneReward === 60 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('milestone', 60)}
-              >
-                <Text style={milestoneReward === 60 ? styles.selectedRewardText : styles.rewardText}>1m</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  milestoneReward === 120 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('milestone', 120)}
-              >
-                <Text style={milestoneReward === 120 ? styles.selectedRewardText : styles.rewardText}>2m</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[
-                  styles.rewardButton,
-                  milestoneReward === 300 && styles.selectedRewardButton
-                ]}
-                onPress={() => handleRewardChange('milestone', 300)}
-              >
-                <Text style={milestoneReward === 300 ? styles.selectedRewardText : styles.rewardText}>5m</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={styles.selectorButton}
+              onPress={() => setShowMilestoneRewardSelector(true)}
+            >
+              <Text style={styles.selectorButtonText}>
+                {milestoneReward < 60 ? `${milestoneReward}s` : `${milestoneReward / 60}m`}
+              </Text>
+              <Icon name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
         </View>
         
@@ -483,6 +449,140 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={styles.versionText}>Version {appVersion}</Text>
         </View>
       </ScrollView>
+      
+      {/* Normal Reward Selector Modal */}
+      <Modal
+        visible={showNormalRewardSelector}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowNormalRewardSelector(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowNormalRewardSelector(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Correct Answer Reward</Text>
+                <View style={styles.modalOptions}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      normalReward === 15 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('normal', 15);
+                      setShowNormalRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      normalReward === 15 && styles.selectedModalOptionText
+                    ]}>15 seconds</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      normalReward === 30 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('normal', 30);
+                      setShowNormalRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      normalReward === 30 && styles.selectedModalOptionText
+                    ]}>30 seconds</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      normalReward === 60 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('normal', 60);
+                      setShowNormalRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      normalReward === 60 && styles.selectedModalOptionText
+                    ]}>1 minute</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+      
+      {/* Milestone Reward Selector Modal */}
+      <Modal
+        visible={showMilestoneRewardSelector}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMilestoneRewardSelector(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowMilestoneRewardSelector(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Milestone Reward</Text>
+                <View style={styles.modalOptions}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      milestoneReward === 60 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('milestone', 60);
+                      setShowMilestoneRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      milestoneReward === 60 && styles.selectedModalOptionText
+                    ]}>1 minute</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      milestoneReward === 120 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('milestone', 120);
+                      setShowMilestoneRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      milestoneReward === 120 && styles.selectedModalOptionText
+                    ]}>2 minutes</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.modalOption,
+                      milestoneReward === 300 && styles.selectedModalOption
+                    ]}
+                    onPress={() => {
+                      handleRewardChange('milestone', 300);
+                      setShowMilestoneRewardSelector(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      milestoneReward === 300 && styles.selectedModalOptionText
+                    ]}>5 minutes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -618,38 +718,16 @@ const styles = StyleSheet.create({
     maxWidth: 200,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
-  rewardSelector: {
+  selectorButton: {
     flexDirection: 'row',
-  },
-  rewardButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
   },
-  selectedRewardButton: {
-    backgroundColor: '#FFE5B4',
-    borderWidth: 2,
-    borderColor: '#FF9F1C',
-  },
-  rewardText: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
-  },
-  selectedRewardText: {
-    fontSize: 14,
-    color: '#FF9F1C',
-    fontWeight: 'bold',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+  selectorButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
   },
   dangerButton: {
     backgroundColor: '#F44336',
@@ -729,6 +807,49 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 20,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+    textAlign: 'center',
+  },
+  modalOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  modalOption: {
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#FF9F1C',
+    borderRadius: 8,
+  },
+  selectedModalOption: {
+    backgroundColor: '#FF9F1C',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
+  },
+  selectedModalOptionText: {
+    color: 'white',
   },
 });
 
