@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import EnhancedScoreService from '../services/EnhancedScoreService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
 import theme from '../styles/theme';
 
 const DailyScoreCard = ({ onPress, style }) => {
   const [scoreInfo, setScoreInfo] = useState(null);
+  const [availableTime, setAvailableTime] = useState(0);
   const [timeUntilReset, setTimeUntilReset] = useState('');
   
   // Animation values
@@ -21,19 +23,26 @@ const DailyScoreCard = ({ onPress, style }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   
   useEffect(() => {
-    loadScoreData();
+    loadInitialData();
     
     // Listen to score updates
-    const listener = EnhancedScoreService.addEventListener((event) => {
+    const scoreListener = EnhancedScoreService.addEventListener((event) => {
       if (event.event === 'scoreUpdated' || 
           event.event === 'dailyReset' || 
           event.event === 'penaltyApplied') {
-        loadScoreData();
+        loadInitialData(); // Reload all data
         
         if (event.event === 'dailyReset') {
           // Celebration animation
           animateCelebration();
         }
+      }
+    });
+
+    // Listen to timer updates
+    const timerListener = EnhancedTimerService.addEventListener((event) => {
+      if (event.event === 'timeUpdate' || event.event === 'creditsAdded' || event.event === 'timeLoaded') {
+        setAvailableTime(event.newTotal !== undefined ? event.newTotal : event.availableTime);
       }
     });
     
@@ -69,14 +78,17 @@ const DailyScoreCard = ({ onPress, style }) => {
     ).start();
     
     return () => {
-      listener();
+      scoreListener();
+      timerListener();
       clearInterval(interval);
     };
   }, []);
   
-  const loadScoreData = async () => {
+  const loadInitialData = async () => {
     const info = EnhancedScoreService.getScoreInfo();
     setScoreInfo(info);
+    const time = EnhancedTimerService.getAvailableTime();
+    setAvailableTime(time);
   };
   
   const updateTimeUntilReset = () => {
@@ -132,7 +144,10 @@ const DailyScoreCard = ({ onPress, style }) => {
             <Text style={styles.title}>Today's Score</Text>
             <Text style={styles.resetTime}>Resets in {timeUntilReset}</Text>
           </View>
-          <Icon name="calendar-today" size={24} color={theme.colors.primary} />
+          <View style={styles.timerContainer}>
+            <Icon name="timer-outline" size={24} color={theme.colors.secondary} />
+            <Text style={styles.timerText}>{EnhancedTimerService.formatTime(availableTime)}</Text>
+          </View>
         </View>
         
         {/* Main Score */}
@@ -232,6 +247,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     ...theme.shadows.md,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -241,6 +259,21 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  timerText: {
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.secondary,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-condensed',
   },
   title: {
     fontSize: 18,

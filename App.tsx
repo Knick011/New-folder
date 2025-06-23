@@ -62,6 +62,10 @@ const App = () => {
         // Initialize timer service
         await EnhancedTimerService.loadSavedTime();
         console.log("✓ Timer service initialized");
+
+        // Initialize NotificationService safely
+        NotificationService.init();
+        console.log("✓ Notification service initialized");
         
         // Schedule notifications
         try {

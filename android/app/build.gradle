@@ -56,10 +56,19 @@ react {
     autolinkLibrariesWithApp()
 }
 
-/**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
- */
+def enableSeparateBuildPerCPUArchitecture = false
 def enableProguardInReleaseBuilds = false
+def enableHermes = true
+
+project.ext.react = [
+    enableHermes: enableHermes,
+    codegenConfig: [
+        removeCliOptions: true
+    ],
+    codegenExcludedLibraries: [
+      'react-native-vector-icons'
+    ]
+]
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -140,4 +149,6 @@ dependencies {
     implementation project(':react-native-vector-icons')
 }
 
-// Add this at the end of the file
+if (enableHermes) {
+    project.ext.react.set("jsEngine", "hermes")
+}

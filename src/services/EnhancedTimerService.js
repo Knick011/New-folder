@@ -190,6 +190,23 @@ class EnhancedTimerService {
     });
   }
 
+  async addTimeCredits(seconds) {
+    if (this.useNativeTimer && BrainBitesTimer) {
+      await BrainBitesTimer.addTime(seconds);
+    } else {
+      this.availableTime += seconds;
+      await this.saveTimeData();
+    }
+
+    console.log(`Added ${seconds}s. New available time: ${this.availableTime}`);
+    this._notifyListeners('creditsAdded', { seconds, newTotal: this.availableTime });
+    
+    // Schedule a reminder if time is still low after adding credits
+    if (this.availableTime > 0 && this.availableTime <= 300) {
+      NotificationService.scheduleEarnTimeReminder(1);
+    }
+  }
+
   async addTime(seconds) {
     const previousTime = this.availableTime;
     this.availableTime += seconds;
@@ -301,27 +318,13 @@ class EnhancedTimerService {
   }
   
   cleanup() {
-    console.log('Cleaning up Enhanced Timer Service');
-    
-    if (this.subscription) {
-      this.subscription.remove();
-    }
-    
-    if (this.appStateSubscription) {
-      this.appStateSubscription.remove();
-    }
-    
+    this.appStateSubscription?.remove();
+    this.subscription?.remove(); // For DeviceEventEmitter
     if (this.useNativeTimer && BrainBitesTimer) {
       BrainBitesTimer.stopListening();
-    }
-    
-    // Track final session time on cleanup
-    if (this.isTrackingSession) {
-      const sessionDuration = (Date.now() - this.sessionStartTime) / 1000;
-      this.totalSessionTime += sessionDuration;
-      AnalyticsService.trackUserEngagement(this.totalSessionTime / 1000, 0);
     }
   }
 }
 
-export default new EnhancedTimerService();
+const enhancedTimerService = new EnhancedTimerService();
+export default enhancedTimerService;

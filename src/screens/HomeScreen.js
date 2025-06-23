@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.js - Simplified with daily streak instead of real-time timer
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -10,8 +10,10 @@ import {
   Animated,
   Easing,
   Dimensions,
-  Platform
+  Platform,
+  AppState
 } from 'react-native';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import EnhancedTimerService from '../services/EnhancedTimerService';
 import QuizService from '../services/QuizService';
@@ -25,7 +27,12 @@ import TimeManagementDisplay from '../components/TimeManagementDisplay';
 
 const { width } = Dimensions.get('window');
 
-const HomeScreen = ({ navigation }) => {
+const HomeScreen = () => {
+  const navigation = useNavigation();
+  const isFocused = useIsFocused();
+  
+  const [user, setUser] = useState({ name: 'Cabby' });
+  const [isInitializing, setIsInitializing] = useState(true);
   const [availableTime, setAvailableTime] = useState(0);
   const [dailyStreak, setDailyStreak] = useState(0);
   const [hasPlayedToday, setHasPlayedToday] = useState(false);
@@ -40,6 +47,7 @@ const HomeScreen = ({ navigation }) => {
     totalDaysPlayed: 0,
     allTimeHighScore: 0
   });
+  const [showIntro, setShowIntro] = useState(false);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -50,12 +58,77 @@ const HomeScreen = ({ navigation }) => {
   // Initialize with empty animation values array
   const categoryAnimValues = useRef([]).current;
   
+  // This effect runs when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Function to load all data for the screen
+      const loadData = async () => {
+        const time = EnhancedTimerService.getAvailableTime();
+        setAvailableTime(time);
+        
+        const info = EnhancedScoreService.getScoreInfo();
+        setScoreInfo(info);
+
+        const settings = await QuizService.getRewardSettings();
+        setRewardSettings(settings);
+
+        if (isInitializing) {
+          setIsInitializing(false);
+        }
+      };
+      
+      loadData(); // Load data initially on focus
+      
+      // Set up listeners for real-time updates
+      const scoreListener = EnhancedScoreService.addEventListener((event) => {
+        // Just reload all data on any score event
+        loadData();
+      });
+      
+      const timerListener = EnhancedTimerService.addEventListener((event) => {
+        // For timer, directly use the event data for fastest update
+        if (event.newTotal !== undefined) {
+          setAvailableTime(event.newTotal);
+        } else if (event.availableTime !== undefined) {
+          setAvailableTime(event.availableTime);
+        }
+      });
+      
+      // Clean up listeners when the screen loses focus
+      return () => {
+        scoreListener();
+        timerListener();
+      };
+    }, [isInitializing]) // Rerun if isInitializing changes
+  );
+
+  // This effect handles the initial onboarding check
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      const hasLaunched = await AsyncStorage.getItem('brainbites_onboarding_complete');
+      if (!hasLaunched) {
+        setShowIntro(true);
+      }
+    };
+    checkFirstLaunch();
+  }, []);
+
+  const handleScoreUpdate = (event) => {
+    if (event.event === 'scoreUpdated' || event.event === 'dailyReset') {
+      const info = EnhancedScoreService.getScoreInfo();
+      setScoreInfo(info);
+    }
+  };
+
+  const handleTimerUpdate = (event) => {
+    if (event.event === 'timeUpdate' || event.event === 'creditsAdded' || event.event === 'timeLoaded') {
+      setAvailableTime(event.newTotal !== undefined ? event.newTotal : event.availableTime);
+    }
+  };
+  
   useEffect(() => {
     // Play menu music when entering home screen
     SoundService.startMenuMusic();
-    
-    // Load initial data
-    loadInitialData();
     
     // Load categories
     loadCategories();
@@ -79,7 +152,7 @@ const HomeScreen = ({ navigation }) => {
     // Listen for daily reset events
     const scoreListener = EnhancedScoreService.addEventListener((event) => {
       if (['dailyReset', 'scoreUpdated', 'penaltyApplied'].includes(event.event)) {
-        loadInitialData();
+        loadData();
       }
       if (event.event === 'dailyReset') {
         handleDailyReset(event);
@@ -105,53 +178,6 @@ const HomeScreen = ({ navigation }) => {
       scoreListener();
     };
   }, []);
-  
-  const loadInitialData = async () => {
-    try {
-      // Load available time (static, not real-time)
-      const time = EnhancedTimerService.getAvailableTime();
-      setAvailableTime(time);
-      
-      // Load daily streak data
-      const streakData = await AsyncStorage.getItem('brainbites_daily_streak');
-      if (streakData) {
-        const parsed = JSON.parse(streakData);
-        const today = new Date().toDateString();
-        const lastPlayed = parsed.lastPlayedDate;
-        
-        if (lastPlayed === today) {
-          setDailyStreak(parsed.streak);
-          setHasPlayedToday(true);
-        } else {
-          // Check if streak should continue or reset
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          
-          if (lastPlayed === yesterday.toDateString()) {
-            // Continue streak
-            setDailyStreak(parsed.streak);
-          } else {
-            // Streak broken
-            setDailyStreak(0);
-          }
-          setHasPlayedToday(false);
-        }
-      }
-      
-      // Load score info
-      await EnhancedScoreService.loadSavedData();
-      const scoreData = EnhancedScoreService.getScoreInfo();
-      setScoreInfo({
-        dailyScore: scoreData.dailyScore,
-        currentStreak: scoreData.currentStreak,
-        totalDaysPlayed: scoreData.totalDaysPlayed,
-        allTimeHighScore: scoreData.allTimeHighScore
-      });
-      
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
   
   const updateDailyStreak = async () => {
     const today = new Date().toDateString();

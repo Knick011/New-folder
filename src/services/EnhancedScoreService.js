@@ -347,6 +347,38 @@ class EnhancedScoreService {
     this.questionStartTime = Date.now();
   }
   
+  recordAnswer(isCorrect, { startTime, category }) {
+    if (isCorrect) {
+      // Calculate time bonus
+      const timeTaken = (Date.now() - startTime) / 1000; // in seconds
+      const timeBonus = Math.max(0, (20 - timeTaken) / 20) * (SCORE_BASE * (TIME_MULTIPLIER - 1));
+      
+      // Calculate streak bonus
+      const streakBonus = this.currentStreak * (SCORE_BASE * STREAK_MULTIPLIER);
+      
+      // Total points for this answer
+      const points = Math.round(SCORE_BASE + timeBonus + streakBonus);
+      
+      this.updateScore(points, true, category);
+      
+      return {
+        pointsEarned: points,
+        newStreak: this.currentStreak,
+        newScore: this.dailyScore,
+        isMilestone: this.currentStreak > 0 && this.currentStreak % STREAK_MILESTONE === 0,
+      };
+    } else {
+      // Incorrect answer
+      this.updateScore(0, false, category);
+      return {
+        pointsEarned: 0,
+        newStreak: this.currentStreak,
+        newScore: this.dailyScore,
+        isMilestone: false,
+      };
+    }
+  }
+  
   async updateScore(points, isCorrect, category) {
     const previousScore = this.dailyScore;
     this.dailyScore += points;

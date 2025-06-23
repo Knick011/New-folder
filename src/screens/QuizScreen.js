@@ -192,7 +192,10 @@ const QuizScreen = ({ navigation, route }) => {
     }, 500);
     
     // Score the answer (incorrect)
-    const scoreResult = EnhancedScoreService.recordAnswer(false);
+    EnhancedScoreService.recordAnswer(false, { 
+      startTime: questionStartTime.current, 
+      category 
+    });
     setStreak(0);
     
     // Play incorrect sound
@@ -224,89 +227,47 @@ const QuizScreen = ({ navigation, route }) => {
     setIsCorrect(correct);
     
     // Score the answer
-    const scoreResult = EnhancedScoreService.recordAnswer(correct);
+    const scoreResult = EnhancedScoreService.recordAnswer(correct, { 
+      startTime: questionStartTime.current,
+      category: category,
+    });
     
     if (correct) {
       // Update UI based on score result
-      setStreak(scoreResult.currentStreak);
-      setScore(scoreResult.dailyScore);
-      setStreakLevel(scoreResult.streakLevel);
-      setIsStreakMilestone(scoreResult.isStreakMilestone);
       setPointsEarned(scoreResult.pointsEarned);
+      setShowPointsAnimation(true);
+      setStreak(scoreResult.newStreak);
+      setScore(scoreResult.newScore);
+      setStreakLevel(scoreResult.streakLevel);
       setCorrectAnswers(prev => prev + 1);
       
-      // Show points animation
-      setShowPointsAnimation(true);
-      
-      // Animate points popup
-      Animated.sequence([
-        Animated.timing(pointsAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.back(1.5)),
-        }),
-        Animated.delay(1500),
-        Animated.timing(pointsAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-          easing: Easing.in(Easing.cubic),
-        }),
-      ]).start(() => {
-        setTimeout(() => {
-          setShowPointsAnimation(false);
-        }, 0);
-      });
-      
-      // Animate streak counter
-      Animated.sequence([
-        Animated.timing(streakAnim, {
-          toValue: 1.3,
-          duration: 400,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.cubic),
-        }),
-        Animated.timing(streakAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-          easing: Easing.inOut(Easing.cubic),
-        }),
-      ]).start();
-      
-      // Handle milestone
-      if (scoreResult.isStreakMilestone) {
-        console.log('🎉 STREAK MILESTONE REACHED:', scoreResult.currentStreak);
-        
-        // Add milestone bonus time - 2 minutes (120 seconds)
-        EnhancedTimerService.addTimeCredits(120);
-        
-        // Play streak sound
+      // Animate points
+      pointsAnim.setValue(0);
+      Animated.spring(pointsAnim, {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }).start();
+
+      // Check for streak milestone
+      if (scoreResult.isMilestone) {
+        setMascotType('gamemode');
+        setMascotMessage(`🔥 ${scoreResult.newStreak} question streak! 🔥\n+120 seconds bonus!`);
+        setShowMascot(true);
+        setIsStreakMilestone(true);
         SoundService.playStreak();
-        
-        // Show streak celebration mascot
-        setTimeout(() => {
-          showMascotForStreak(scoreResult.currentStreak);
-        }, 800);
-        
-        // Show explanation
-        setTimeout(() => {
-          setShowExplanation(true);
-          showExplanationWithAnimation();
-        }, 3000);
-        
+        EnhancedTimerService.addTimeCredits(120);
       } else {
         // Regular correct answer
         EnhancedTimerService.addTimeCredits(30);
         SoundService.playCorrect();
-        
-        // Show explanation
-        setTimeout(() => {
-          setShowExplanation(true);
-          showExplanationWithAnimation();
-        }, 1200);
       }
+      
+      // Show explanation
+      setTimeout(() => {
+        setShowExplanation(true);
+        showExplanationWithAnimation();
+      }, 1200);
     } else {
       // Wrong answer
       setStreak(0);

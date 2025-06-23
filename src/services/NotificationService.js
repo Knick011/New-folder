@@ -9,7 +9,12 @@ class NotificationService {
     this.STORAGE_KEY = 'brainbites_notification_data';
     this.notificationsEnabled = true;
     this.isInitialized = false;
-    
+  }
+  
+  init() {
+    if (this.isInitialized) {
+      return;
+    }
     // Initialize notifications
     this.initializeNotifications();
     this.loadSettings();
