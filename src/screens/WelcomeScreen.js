@@ -135,6 +135,10 @@ const WelcomeScreen = ({ navigation }) => {
         type = 'excited';
         message = 'You\'re all set! 🌟\n\nThis journey will make you:\n• Smarter 🧠\n• More knowledgeable 📖\n• Better at managing screen time ⚖️\n\nLet\'s begin your adventure! 🚀';
         break;
+      case 4:
+        type = 'learn-from-mistakes';
+        message = 'Wrong answers temporarily reduce your score, but don\'t worry! Keep playing to recover quickly. Every mistake is a chance to learn and grow stronger!';
+        break;
       default:
         type = 'excited';
         message = 'Welcome to Brain Bites Mobile! Let\'s learn together! 🎓';
@@ -147,26 +151,32 @@ const WelcomeScreen = ({ navigation }) => {
 
   const pages = [
     {
-      title: "Welcome to Brain Bites Mobile!",
-      text: "Transform screen time into learning time! Answer questions correctly to earn time for your favorite apps.",
+      title: "Welcome to Brain Bites!",
+      text: "Transform your screen time into learning time. The more you learn, the more time you earn for your favorite apps!",
       icon: "brain",
-      gradient: ['#FF9F1C', '#FFB347'],
+      gradient: ['#FF9F1C', '#FFD699'],
     },
     {
       title: "Learn & Earn",
-      text: "Each correct answer gives you app time. Build streaks for bonus rewards and watch your knowledge grow!",
+      text: "Each correct quiz answer adds to your screen time. Build up a streak for awesome bonus rewards!",
       icon: "head-question",
-      gradient: ['#FF6B6B', '#FF8E8E'],
+      gradient: ['#FF6B6B', '#FFB8B8'],
     },
     {
       title: "Use Your Time Wisely",
-      text: "Spend earned time on social media, games, and entertainment. When time runs out, return to learn more!",
-      icon: "clock-outline",
-      gradient: ['#4ECDC4', '#44A08D'],
+      text: "Enjoy your earned time on any app you like! But be careful... if time runs out, your score will start to drop.",
+      icon: "shield-alert-outline",
+      gradient: ['#4ECDC4', '#A8E6CF'],
+    },
+    {
+      title: "Learn from Mistakes",
+      text: "Wrong answers temporarily reduce your score, but don't worry! Keep playing to recover quickly. Every mistake is a chance to learn and grow stronger!",
+      icon: "lightbulb-on-outline",
+      gradient: ['#667eea', '#764ba2'],
     },
     {
       title: "Ready to Start?",
-      text: "Begin your brain-powered journey! Make every minute of screen time count toward becoming smarter.",
+      text: "Let's begin your journey to becoming smarter while managing your screen time like a pro. You've got this!",
       icon: "rocket-launch",
       gradient: ['#A8E6CF', '#7FCDCD'],
       isLast: true
@@ -398,13 +408,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
@@ -412,7 +422,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 16,
     textAlign: 'center',
@@ -436,23 +446,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    marginHorizontal: 6,
   },
   activeDot: {
     backgroundColor: 'white',
-    width: 20,
+    width: 28,
   },
   progressBar: {
-    width: 200,
+    width: '60%',
     height: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressFill: {
     height: '100%',
@@ -466,13 +476,13 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
   },
   nextButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 28,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
@@ -485,7 +495,7 @@ const styles = StyleSheet.create({
   nextText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
   },

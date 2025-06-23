@@ -224,22 +224,21 @@ class EnhancedScoreService {
   }
   
   showDailyResetNotification(rolloverBonus, wasNewRecord) {
-    let message = '🌅 Good Morning, CaBBybara!\n\n';
+    let message = '🌅 Rise and shine, Brainiac!\n\n';
     
     if (this.yesterdayScore > 0) {
-      message += `Yesterday's score: ${this.yesterdayScore.toLocaleString()} points\n`;
+      message += `Yesterday's score: ${this.yesterdayScore.toLocaleString()}! Awesome work!\n`;
       
       if (wasNewRecord) {
-        message += `🏆 NEW PERSONAL BEST! 🏆\n`;
+        message += `🏆 YOU SET A NEW HIGH SCORE! 🏆\nAmazing! Can you beat it today?\n`;
       }
     }
     
     if (rolloverBonus > 0) {
-      message += `\n✨ Rollover Bonus: +${rolloverBonus} points\n`;
-      message += `Great job saving screen time!\n`;
+      message += `\n✨ You saved time yesterday, so you get a +${rolloverBonus} point head start!\n`;
     }
     
-    message += `\nReady for a new day of learning? 🚀`;
+    message += `\nReady to solve some quizzes? Let's go! 🚀`;
     
     this._notifyListeners('showMessage', {
       type: 'dailyReset',
@@ -323,11 +322,10 @@ class EnhancedScoreService {
         
         this._notifyListeners('penaltyApplied', {
           penalty,
-          overtimeMinutes: Math.floor(overtimeMinutes),
-          dailyScore: this.dailyScore,
           totalPenalty: this.overtimePenalty
         });
         
+        // Show a mascot warning on every 50-point penalty milestone
         if (this.overtimePenalty % 50 === 0) {
           this.showPenaltyWarning(this.overtimePenalty);
         }
@@ -338,7 +336,7 @@ class EnhancedScoreService {
   showPenaltyWarning(totalPenalty) {
     this._notifyListeners('showMessage', {
       type: 'penalty',
-      message: `⚠️ Overtime Alert!\n\nYou've lost ${totalPenalty} points today!\n\nYour daily score: ${this.dailyScore}\n\nComplete quizzes to earn time and stop losing points! 😰`
+      message: `Oops! 😬 You're out of time!\n\nYou've lost ${totalPenalty} points so far.\n\nQuick, solve a quiz to earn more time and stop the penalty! You can do it! 💪`
     });
   }
   

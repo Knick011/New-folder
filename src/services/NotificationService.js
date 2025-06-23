@@ -57,12 +57,14 @@ class NotificationService {
       PushNotification.createChannel(
         {
           channelId: 'brainbites-local',
-          channelName: 'BrainBites Local Notifications',
-          channelDescription: 'Local notifications for screen time alerts',
+          channelName: "BrainBites - CaBBy's Messages",
+          channelDescription: "Fun reminders from CaBBy to keep your brain growing!",
           playSound: true,
           soundName: 'default',
-          importance: 4, // High importance
+          importance: 4,
           vibrate: true,
+          lightColor: '#FF9F1C',
+          enableLights: true,
         },
         (created) => {
           console.log(`Local notification channel created: ${created}`);
@@ -135,8 +137,8 @@ class NotificationService {
       channelId: 'brainbites-local',
       
       // Notification content
-      title: `⏰ Screen Time Alert`,
-      message: `You have ${minutes} minute${minutes !== 1 ? 's' : ''} of screen time remaining.`,
+      title: `⏱️ CaBBy Says: Time Check!`,
+      message: `Whoa! Only ${minutes} minute${minutes !== 1 ? 's' : ''} left! Time to power up with more quizzes! 🧠✨`,
       
       // When to fire
       date: fireDate,
@@ -159,7 +161,7 @@ class NotificationService {
       autoCancel: true,
       
       // Large icon for Android
-      largeIcon: 'ic_launcher',
+      largeIcon: 'cabby_notification',
       smallIcon: 'ic_notification',
     });
     
@@ -181,8 +183,8 @@ class NotificationService {
       channelId: 'brainbites-local',
       
       // Notification content
-      title: '⌛ Screen Time Expired',
-      message: 'Your screen time has run out. Complete quizzes to earn more time!',
+      title: '🎯 CaBBy Needs You!',
+      message: 'Your screen time is up! Come back and feed your brain with fun quizzes to unlock more time! 🌟',
       
       // Notification settings
       playSound: true,
@@ -200,7 +202,7 @@ class NotificationService {
       autoCancel: true,
       
       // Large icon for Android
-      largeIcon: 'ic_launcher',
+      largeIcon: 'cabby_notification',
       smallIcon: 'ic_notification',
     });
     
@@ -236,8 +238,8 @@ class NotificationService {
     // Schedule the reminder
     PushNotification.localNotificationSchedule({
       channelId: 'brainbites-local',
-      title: '📚 Time to Learn!',
-      message: 'Complete quizzes to earn more screen time for your favorite apps!',
+      title: "🎮 CaBBy's Power-Up Time!",
+      message: "Hey superstar! Ready to boost your brain and unlock more app time? Let's make learning fun! 🚀✨",
       date: fireDate,
       playSound: true,
       soundName: 'default',
@@ -246,7 +248,7 @@ class NotificationService {
         type: 'earn-reminder'
       },
       autoCancel: true,
-      largeIcon: 'ic_launcher',
+      largeIcon: 'cabby_notification',
       smallIcon: 'ic_notification',
     });
     
@@ -286,8 +288,8 @@ class NotificationService {
     // Schedule the notification
     PushNotification.localNotificationSchedule({
       channelId: 'brainbites-local',
-      title: '🔥 Keep Your Streak Going!',
-      message: 'Complete a quiz today to maintain your learning streak!',
+      title: "🔥 CaBBy's Streak Alert!",
+      message: "Don't break the chain! Your brain is on fire! One quiz keeps your amazing streak alive! 💪🌟",
       date: reminderTime,
       playSound: true,
       soundName: 'default',
@@ -296,7 +298,7 @@ class NotificationService {
         type: 'streak-reminder'
       },
       autoCancel: true,
-      largeIcon: 'ic_launcher',
+      largeIcon: 'cabby_notification',
       smallIcon: 'ic_notification',
     });
     
@@ -314,8 +316,8 @@ class NotificationService {
     
     PushNotification.localNotification({
       channelId: 'brainbites-local',
-      title: '🎉 New Milestone Achieved!',
-      message: `Congratulations! You've reached a ${milestone} correct answer streak!`,
+      title: '🏆 CaBBy is SO Proud!',
+      message: `WOW! You hit ${milestone} correct answers! Your brain is growing stronger! Keep being awesome! 🎊🧠`,
       playSound: true,
       soundName: 'default',
       vibrate: true,
@@ -324,7 +326,7 @@ class NotificationService {
         milestone: milestone
       },
       autoCancel: true,
-      largeIcon: 'ic_launcher',
+      largeIcon: 'cabby_notification',
       smallIcon: 'ic_notification',
     });
     
